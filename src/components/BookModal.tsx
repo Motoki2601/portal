@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
-import { X, Star } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Star, Search } from 'lucide-react';
 import type { BookItem, BookStatus } from '../types';
-import { searchBooks, type BookSuggestion } from '../googleBooks';
+import { searchBooks, type BookSuggestion, type SearchField } from '../googleBooks';
 
 interface Props {
   item?: BookItem | null;
@@ -23,12 +23,15 @@ export default function BookModal({ item, onSave, onClose }: Props) {
   const [memo, setMemo] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
-  const [suggestions, setSuggestions] = useState<BookSuggestion[]>([]);
-  const skipNextSearch = useRef(false);
+
+  const [searchField, setSearchField] = useState<SearchField>('title');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [results, setResults] = useState<BookSuggestion[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searched, setSearched] = useState(false);
 
   useEffect(() => {
     if (item) {
-      skipNextSearch.current = true;
       setTitle(item.title);
       setAuthor(item.author);
       setStatus(item.status);
@@ -38,27 +41,21 @@ export default function BookModal({ item, onSave, onClose }: Props) {
     }
   }, [item]);
 
-  useEffect(() => {
-    if (skipNextSearch.current) {
-      skipNextSearch.current = false;
-      setSuggestions([]);
-      return;
-    }
-    if (!title.trim()) {
-      setSuggestions([]);
-      return;
-    }
-    const handle = setTimeout(() => {
-      searchBooks(title).then(setSuggestions);
-    }, 400);
-    return () => clearTimeout(handle);
-  }, [title]);
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setSearched(false);
+    const r = await searchBooks(searchQuery, searchField);
+    setResults(r);
+    setSearching(false);
+    setSearched(true);
+  };
 
-  const selectSuggestion = (s: BookSuggestion) => {
-    skipNextSearch.current = true;
+  const selectResult = (s: BookSuggestion) => {
     setTitle(s.title);
     setAuthor(s.authors.join(', '));
-    setSuggestions([]);
+    setResults([]);
+    setSearched(false);
   };
 
   const addTag = () => {
@@ -98,27 +95,68 @@ export default function BookModal({ item, onSave, onClose }: Props) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* 書名 */}
-          <div className="relative">
-            <label htmlFor="book-title" className="block text-sm font-medium text-slate-700 mb-1">
-              書名 <span className="text-red-500">*</span>
+          {/* 本を検索 */}
+          <div className="bg-indigo-50/60 rounded-xl p-3 space-y-2">
+            <label htmlFor="book-search-input" className="block text-sm font-medium text-slate-700">
+              本を検索
             </label>
-            <input
-              id="book-title"
-              required
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="例: 銀河鉄道の夜"
-              autoComplete="off"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-            {suggestions.length > 0 && (
-              <ul className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-                {suggestions.map((s, i) => (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSearchField('title')}
+                aria-pressed={searchField === 'title'}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  searchField === 'title'
+                    ? 'bg-indigo-700 border-indigo-700 text-white'
+                    : 'border-slate-200 text-slate-500 bg-white'
+                }`}
+              >
+                書名で
+              </button>
+              <button
+                type="button"
+                onClick={() => setSearchField('author')}
+                aria-pressed={searchField === 'author'}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  searchField === 'author'
+                    ? 'bg-indigo-700 border-indigo-700 text-white'
+                    : 'border-slate-200 text-slate-500 bg-white'
+                }`}
+              >
+                著者で
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                id="book-search-input"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleSearch())}
+                placeholder={searchField === 'title' ? '例: 銀河鉄道の夜' : '例: 宮沢賢治'}
+                className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <button
+                type="button"
+                onClick={handleSearch}
+                disabled={searching || !searchQuery.trim()}
+                className="px-3 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:opacity-40 flex items-center gap-1 text-sm"
+              >
+                <Search size={14} />
+                検索
+              </button>
+            </div>
+
+            {searching && <p className="text-xs text-slate-400 px-1">検索中...</p>}
+            {!searching && searched && results.length === 0 && (
+              <p className="text-xs text-slate-400 px-1">見つかりませんでした。手入力してください。</p>
+            )}
+            {results.length > 0 && (
+              <ul className="bg-white border border-slate-200 rounded-lg divide-y max-h-56 overflow-y-auto">
+                {results.map((s, i) => (
                   <li key={i}>
                     <button
                       type="button"
-                      onClick={() => selectSuggestion(s)}
+                      onClick={() => selectResult(s)}
                       className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50"
                     >
                       <p className="text-gray-800 truncate">{s.title}</p>
@@ -132,6 +170,21 @@ export default function BookModal({ item, onSave, onClose }: Props) {
             )}
           </div>
 
+          {/* 書名 */}
+          <div>
+            <label htmlFor="book-title" className="block text-sm font-medium text-slate-700 mb-1">
+              書名 <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="book-title"
+              required
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="例: 銀河鉄道の夜"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+
           {/* 著者 */}
           <div>
             <label htmlFor="book-author" className="block text-sm font-medium text-slate-700 mb-1">
@@ -141,7 +194,7 @@ export default function BookModal({ item, onSave, onClose }: Props) {
               id="book-author"
               value={author}
               onChange={e => setAuthor(e.target.value)}
-              placeholder="書名の候補から選ぶと自動入力されます"
+              placeholder="例: 宮沢賢治"
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>

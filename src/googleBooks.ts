@@ -3,6 +3,8 @@ export interface BookSuggestion {
   authors: string[];
 }
 
+export type SearchField = 'title' | 'author';
+
 interface GoogleBooksVolumeInfo {
   title?: string;
   authors?: string[];
@@ -16,13 +18,15 @@ interface GoogleBooksResponse {
   items?: GoogleBooksItem[];
 }
 
-export async function searchBooks(query: string): Promise<BookSuggestion[]> {
+export async function searchBooks(query: string, field: SearchField): Promise<BookSuggestion[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
 
+  const qualifier = field === 'author' ? 'inauthor' : 'intitle';
+
   try {
     const res = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=5`
+      `https://www.googleapis.com/books/v1/volumes?q=${qualifier}:${encodeURIComponent(trimmed)}&maxResults=8`
     );
     if (!res.ok) return [];
     const data = (await res.json()) as GoogleBooksResponse;
