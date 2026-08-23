@@ -1,16 +1,16 @@
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { db } from './firebase';
 import type { WishItem } from './types';
 
-const KEY = 'wishlist_items';
+const docRef = (uid: string) => doc(db, 'users', uid, 'wishlist', 'data');
 
-export function loadItems(): WishItem[] {
-  try {
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as WishItem[]) : [];
-  } catch {
-    return [];
-  }
+export function subscribeItems(uid: string, onChange: (items: WishItem[]) => void): () => void {
+  return onSnapshot(docRef(uid), snap => {
+    const data = snap.data();
+    onChange((data?.items as WishItem[]) ?? []);
+  });
 }
 
-export function saveItems(items: WishItem[]): void {
-  localStorage.setItem(KEY, JSON.stringify(items));
+export function saveItems(uid: string, items: WishItem[]): Promise<void> {
+  return setDoc(docRef(uid), { items });
 }

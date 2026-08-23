@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus } from 'lucide-react';
-import { loadItems, saveItems } from './storage';
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import { Plus, LogOut } from 'lucide-react';
+import { auth, googleProvider } from './firebase';
+import { subscribeItems, saveItems } from './storage';
 import type { WishItem, SortKey } from './types';
 import ItemCard from './components/ItemCard';
 import ItemModal from './components/ItemModal';
@@ -9,14 +11,25 @@ import FilterBar from './components/FilterBar';
 const nextId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export default function App() {
-  const [items, setItems] = useState<WishItem[]>(() => loadItems());
+  const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [items, setItems] = useState<WishItem[]>([]);
   const [editItem, setEditItem] = useState<WishItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('rank');
   const [showPurchased, setShowPurchased] = useState(false);
 
-  useEffect(() => saveItems(items), [items]);
+  useEffect(() => onAuthStateChanged(auth, setUser), []);
+
+  useEffect(() => {
+    if (!user) return;
+    return subscribeItems(user.uid, setItems);
+  }, [user]);
+
+  const persist = (next: WishItem[]) => {
+    setItems(next);
+    if (user) saveItems(user.uid, next);
+  };
 
   const tags = useMemo(() => [...new Set(items.flatMap(i => i.tags))].sort(), [items]);
 
@@ -38,39 +51,63 @@ export default function App() {
 
   const handleSave = (data: Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
-    if (editItem) {
-      setItems(prev => prev.map(i =>
-        i.id === editItem.id ? { ...i, ...data, updatedAt: now } : i
-      ));
-    } else {
-      setItems(prev => [...prev, { ...data, id: nextId(), createdAt: now, updatedAt: now }]);
-    }
+    const next = editItem
+      ? items.map(i => (i.id === editItem.id ? { ...i, ...data, updatedAt: now } : i))
+      : [...items, { ...data, id: nextId(), createdAt: now, updatedAt: now }];
+    persist(next);
     closeModal();
   };
 
   const handleDelete = (id: string) => {
     if (confirm('削除しますか？')) {
-      setItems(prev => prev.filter(i => i.id !== id));
+      persist(items.filter(i => i.id !== id));
     }
   };
 
   const handleTogglePurchased = (id: string) => {
     const now = new Date().toISOString();
-    setItems(prev => prev.map(i =>
-      i.id === id ? { ...i, purchased: !i.purchased, updatedAt: now } : i
-    ));
+    persist(items.map(i => (i.id === id ? { ...i, purchased: !i.purchased, updatedAt: now } : i)));
   };
 
   const totalPrice = filtered
     .filter(i => !i.purchased && i.price > 0)
     .reduce((sum, i) => sum + i.price, 0);
 
+  if (user === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-violet-50/60 via-white to-fuchsia-50/30">
+        <p className="text-slate-400">読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gradient-to-b from-violet-50/60 via-white to-fuchsia-50/30">
+        <h1 className="text-xl font-bold tracking-tight text-violet-900">✦ 欲しいものリスト</h1>
+        <button
+          onClick={() => signInWithPopup(auth, googleProvider)}
+          className="bg-violet-500 hover:bg-violet-600 active:scale-95 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-md shadow-violet-200 transition-all"
+        >
+          Googleでログイン
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-50/60 via-white to-fuchsia-50/30">
       {/* ヘッダー */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-violet-100/60 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-5 py-4">
+        <div className="max-w-2xl mx-auto px-5 py-4 flex items-center justify-between">
           <h1 className="text-lg font-bold tracking-tight text-violet-900">✦ 欲しいものリスト</h1>
+          <button
+            onClick={() => signOut(auth)}
+            className="text-slate-400 hover:text-violet-600 transition-colors"
+            aria-label="ログアウト"
+          >
+            <LogOut size={18} />
+          </button>
         </div>
       </header>
 
