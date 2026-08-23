@@ -1,73 +1,35 @@
-# React + TypeScript + Vite
+# マイポータル
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+個人用のポータルアプリ。Googleログイン後、以下のリストを管理できる。
 
-Currently, two official plugins are available:
+- 欲しいものリスト
+- 作ってみたい料理
+- 読んだ本（Google Books検索でタイトル/著者を補完）
+- つぶやきメモ（近日公開）
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+各データはFirebase Authでログインしたユーザーごとに、Firestoreへリアルタイム同期される。
 
-## React Compiler
+## 使用技術
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19 / TypeScript / Vite
+- Tailwind CSS
+- Firebase (Authentication / Firestore)
 
-## Expanding the ESLint configuration
+## 開発
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## ビルド
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
 ```
+
+読んだ本のGoogle Books検索でAPIキーを使う場合は `VITE_GOOGLE_BOOKS_API_KEY` を環境変数で渡す（未設定でもキーなしでAPIは動くが、リクエスト数が多いとレート制限にかかりやすい）。
+
+## デプロイ
+
+`main` ブランチへのpushで GitHub Actions (`.github/workflows/deploy.yml`) が GitHub Pages へ自動デプロイする。
