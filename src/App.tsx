@@ -13,6 +13,25 @@ export default function App() {
 
   useEffect(() => onAuthStateChanged(auth, setUser), []);
 
+  // Push a history entry per sub-view so the mobile swipe-back gesture
+  // (and the Android back button) returns to the portal instead of
+  // leaving the site entirely.
+  useEffect(() => {
+    history.replaceState({ view: 'portal' }, '');
+    const onPopState = (e: PopStateEvent) => {
+      setView((e.state?.view as View) ?? 'portal');
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const openView = (next: 'wishlist' | 'recipes') => {
+    history.pushState({ view: next }, '');
+    setView(next);
+  };
+
+  const goBack = () => history.back();
+
   if (user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white via-white to-slate-50">
@@ -36,12 +55,12 @@ export default function App() {
   }
 
   if (view === 'wishlist') {
-    return <WishlistPage user={user} onBack={() => setView('portal')} />;
+    return <WishlistPage user={user} onBack={goBack} />;
   }
 
   if (view === 'recipes') {
-    return <RecipePage user={user} onBack={() => setView('portal')} />;
+    return <RecipePage user={user} onBack={goBack} />;
   }
 
-  return <Portal onOpenWishlist={() => setView('wishlist')} onOpenRecipes={() => setView('recipes')} />;
+  return <Portal onOpenWishlist={() => openView('wishlist')} onOpenRecipes={() => openView('recipes')} />;
 }
