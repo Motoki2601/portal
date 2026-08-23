@@ -11,11 +11,11 @@ interface Props {
 
 const RANK_COLORS = [
   '',
-  'bg-gradient-to-br from-slate-400 to-slate-300',
-  'bg-gradient-to-br from-sky-400 to-cyan-300',
-  'bg-gradient-to-br from-lime-400 to-emerald-400',
-  'bg-gradient-to-br from-amber-400 to-orange-300',
-  'bg-gradient-to-br from-rose-500 to-pink-400',
+  'bg-slate-300',
+  'bg-indigo-300',
+  'bg-indigo-500',
+  'bg-indigo-700',
+  'bg-indigo-900',
 ];
 const RANK_LABELS = ['', '★1', '★2', '★3', '★4', '★5'];
 

@@ -11,11 +11,11 @@ interface Props {
 
 const RANK_COLORS = [
   '',
-  'bg-gradient-to-br from-slate-400 to-slate-300',   // ★1: スレート（最低優先）
-  'bg-gradient-to-br from-sky-400 to-cyan-300',      // ★2: 空→シアン
-  'bg-gradient-to-br from-lime-400 to-emerald-400',  // ★3: 黄緑→緑（中間）
-  'bg-gradient-to-br from-amber-400 to-orange-300',  // ★4: アンバー→オレンジ
-  'bg-gradient-to-br from-rose-500 to-pink-400',     // ★5: 赤→ピンク（最高優先）
+  'bg-slate-300',   // ★1: 最低優先
+  'bg-indigo-300',  // ★2
+  'bg-indigo-500',  // ★3: 中間
+  'bg-indigo-700',  // ★4
+  'bg-indigo-900',  // ★5: 最高優先
 ];
 const RANK_LABELS = ['', '★1', '★2', '★3', '★4', '★5'];
 

@@ -11,19 +11,19 @@ interface Props {
 const RANKS = [1, 2, 3, 4, 5];
 const RANK_ACTIVE_COLORS = [
   '',
-  'bg-gradient-to-br from-slate-400 to-slate-300 border-slate-400 text-white',
-  'bg-gradient-to-br from-sky-400 to-cyan-300 border-sky-400 text-white',
-  'bg-gradient-to-br from-lime-400 to-emerald-400 border-lime-400 text-white',
-  'bg-gradient-to-br from-amber-400 to-orange-300 border-amber-400 text-white',
-  'bg-gradient-to-br from-rose-500 to-pink-400 border-rose-500 text-white',
+  'bg-slate-300 border-slate-300 text-white',
+  'bg-indigo-300 border-indigo-300 text-white',
+  'bg-indigo-500 border-indigo-500 text-white',
+  'bg-indigo-700 border-indigo-700 text-white',
+  'bg-indigo-900 border-indigo-900 text-white',
 ];
 const RANK_IDLE_COLORS = [
   '',
   'border-slate-300 text-slate-400 hover:border-slate-400',
-  'border-sky-200 text-sky-400 hover:border-sky-400',
-  'border-lime-200 text-lime-500 hover:border-lime-400',
-  'border-amber-200 text-amber-500 hover:border-amber-400',
-  'border-rose-200 text-rose-400 hover:border-rose-400',
+  'border-indigo-200 text-indigo-400 hover:border-indigo-400',
+  'border-indigo-300 text-indigo-500 hover:border-indigo-500',
+  'border-indigo-400 text-indigo-600 hover:border-indigo-600',
+  'border-indigo-500 text-indigo-700 hover:border-indigo-700',
 ];
 
 export default function ItemModal({ item, onSave, onClose }: Props) {
