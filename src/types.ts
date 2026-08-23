@@ -27,3 +27,19 @@ export interface RecipeItem {
 }
 
 export type RecipeSortKey = 'rank' | 'createdAt';
+
+export type BookStatus = 'want' | 'reading' | 'done';
+
+export interface BookItem {
+  id: string;
+  title: string;
+  author: string;
+  status: BookStatus;
+  rating: number; // 0（未評価）〜5
+  memo: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BookSortKey = 'rating' | 'createdAt';

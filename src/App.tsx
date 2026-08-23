@@ -4,8 +4,9 @@ import { auth, googleProvider } from './firebase';
 import Portal from './Portal';
 import WishlistPage from './WishlistPage';
 import RecipePage from './RecipePage';
+import BooksPage from './BooksPage';
 
-type View = 'portal' | 'wishlist' | 'recipes';
+type View = 'portal' | 'wishlist' | 'recipes' | 'books';
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -25,7 +26,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const openView = (next: 'wishlist' | 'recipes') => {
+  const openView = (next: 'wishlist' | 'recipes' | 'books') => {
     history.pushState({ view: next }, '');
     setView(next);
   };
@@ -62,5 +63,15 @@ export default function App() {
     return <RecipePage user={user} onBack={goBack} />;
   }
 
-  return <Portal onOpenWishlist={() => openView('wishlist')} onOpenRecipes={() => openView('recipes')} />;
+  if (view === 'books') {
+    return <BooksPage user={user} onBack={goBack} />;
+  }
+
+  return (
+    <Portal
+      onOpenWishlist={() => openView('wishlist')}
+      onOpenRecipes={() => openView('recipes')}
+      onOpenBooks={() => openView('books')}
+    />
+  );
 }

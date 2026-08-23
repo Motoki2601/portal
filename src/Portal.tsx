@@ -5,9 +5,10 @@ import { auth } from './firebase';
 interface Props {
   onOpenWishlist: () => void;
   onOpenRecipes: () => void;
+  onOpenBooks: () => void;
 }
 
-export default function Portal({ onOpenWishlist, onOpenRecipes }: Props) {
+export default function Portal({ onOpenWishlist, onOpenRecipes, onOpenBooks }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-white to-slate-50">
       <header className="bg-white/80 backdrop-blur-sm border-b border-indigo-100/60 sticky top-0 z-40">
@@ -50,15 +51,18 @@ export default function Portal({ onOpenWishlist, onOpenRecipes }: Props) {
           </span>
         </button>
 
-        <div className="w-full flex items-center gap-4 bg-white/50 rounded-2xl px-5 py-4 border border-indigo-100/40 opacity-60">
-          <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-slate-100 text-slate-400">
+        <button
+          onClick={onOpenBooks}
+          className="w-full flex items-center gap-4 bg-white/90 hover:bg-indigo-50 active:scale-[0.99] rounded-2xl px-5 py-4 shadow-sm border border-indigo-100/60 transition-all text-left"
+        >
+          <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-indigo-100 text-indigo-700">
             <BookOpen size={20} />
           </span>
           <span>
-            <p className="font-semibold text-slate-500">読んだ本</p>
-            <p className="text-xs text-slate-400 mt-0.5">近日公開</p>
+            <p className="font-semibold text-slate-700">読んだ本</p>
+            <p className="text-xs text-slate-400 mt-0.5">読書記録をつける</p>
           </span>
-        </div>
+        </button>
 
         <div className="w-full flex items-center gap-4 bg-white/50 rounded-2xl px-5 py-4 border border-indigo-100/40 opacity-60">
           <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-slate-100 text-slate-400">
