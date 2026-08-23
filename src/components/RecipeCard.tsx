@@ -1,31 +1,31 @@
 import { ExternalLink, Pencil, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
-import type { WishItem } from '../types';
+import type { RecipeItem } from '../types';
 
 interface Props {
-  item: WishItem;
-  onEdit: (item: WishItem) => void;
+  item: RecipeItem;
+  onEdit: (item: RecipeItem) => void;
   onDelete: (id: string) => void;
-  onTogglePurchased: (id: string) => void;
+  onToggleCooked: (id: string) => void;
 }
 
 const RANK_COLORS = [
   '',
-  'bg-gradient-to-br from-slate-400 to-slate-300',   // ★1: スレート（最低優先）
-  'bg-gradient-to-br from-sky-400 to-cyan-300',      // ★2: 空→シアン
-  'bg-gradient-to-br from-lime-400 to-emerald-400',  // ★3: 黄緑→緑（中間）
-  'bg-gradient-to-br from-amber-400 to-orange-300',  // ★4: アンバー→オレンジ
-  'bg-gradient-to-br from-rose-500 to-pink-400',     // ★5: 赤→ピンク（最高優先）
+  'bg-gradient-to-br from-slate-400 to-slate-300',
+  'bg-gradient-to-br from-sky-400 to-cyan-300',
+  'bg-gradient-to-br from-lime-400 to-emerald-400',
+  'bg-gradient-to-br from-amber-400 to-orange-300',
+  'bg-gradient-to-br from-rose-500 to-pink-400',
 ];
 const RANK_LABELS = ['', '★1', '★2', '★3', '★4', '★5'];
 
-export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: Props) {
+export default function RecipeCard({ item, onEdit, onDelete, onToggleCooked }: Props) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div
       className={`bg-white rounded-2xl shadow-sm border border-slate-100 transition-opacity ${
-        item.purchased ? 'opacity-40' : ''
+        item.cooked ? 'opacity-40' : ''
       }`}
     >
       <div className="p-4">
@@ -35,17 +35,15 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
             className={`mt-0.5 shrink-0 w-9 h-9 flex items-center justify-center rounded-full text-xs font-bold text-white ${
               RANK_COLORS[item.rank] ?? 'bg-gray-300'
             }`}
+            aria-label={`作りたい度 ${RANK_LABELS[item.rank]}`}
           >
             {RANK_LABELS[item.rank]}
           </span>
 
           {/* メイン情報 */}
           <div className="flex-1 min-w-0">
-            <p className={`font-semibold text-gray-800 truncate ${item.purchased ? 'line-through' : ''}`}>
+            <p className={`font-semibold text-gray-800 truncate ${item.cooked ? 'line-through' : ''}`}>
               {item.name}
-            </p>
-            <p className="text-indigo-700 font-bold text-sm mt-0.5">
-              {item.price > 0 ? `¥${item.price.toLocaleString()}` : '価格未設定'}
             </p>
             <div className="flex flex-wrap gap-1 mt-2">
               {item.tags.map(t => (
@@ -64,6 +62,7 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-1.5 text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg"
+                aria-label="レシピを開く"
               >
                 <ExternalLink size={16} />
               </a>
@@ -71,12 +70,14 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
             <button
               onClick={() => onEdit(item)}
               className="p-1.5 text-slate-400 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg"
+              aria-label="編集"
             >
               <Pencil size={16} />
             </button>
             <button
               onClick={() => onDelete(item.id)}
               className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
+              aria-label="削除"
             >
               <Trash2 size={16} />
             </button>
@@ -84,10 +85,11 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
         </div>
 
         {/* 展開ボタン */}
-        {(item.memo || item.url) && (
+        {(item.memo || item.ingredients || item.url) && (
           <button
             onClick={() => setExpanded(!expanded)}
             className="mt-3 flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 w-full justify-end"
+            aria-expanded={expanded}
           >
             {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
             {expanded ? '閉じる' : '詳細'}
@@ -99,7 +101,7 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
           <div className="mt-2 pt-3 border-t space-y-2">
             {item.url && (
               <div>
-                <p className="text-xs text-gray-400 mb-0.5">URL</p>
+                <p className="text-xs text-gray-400 mb-0.5">レシピURL</p>
                 <a
                   href={item.url}
                   target="_blank"
@@ -108,6 +110,12 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
                 >
                   {item.url}
                 </a>
+              </div>
+            )}
+            {item.ingredients && (
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">材料</p>
+                <p className="text-xs text-gray-700 whitespace-pre-wrap">{item.ingredients}</p>
               </div>
             )}
             {item.memo && (
@@ -119,11 +127,11 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={item.purchased}
-                onChange={() => onTogglePurchased(item.id)}
+                checked={item.cooked}
+                onChange={() => onToggleCooked(item.id)}
                 className="w-3.5 h-3.5 accent-indigo-600"
               />
-              <span className="text-xs text-gray-600">購入済み</span>
+              <span className="text-xs text-gray-600">作った</span>
             </label>
           </div>
         )}

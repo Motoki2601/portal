@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
-import type { WishItem } from '../types';
+import type { RecipeItem } from '../types';
 
 interface Props {
-  item?: WishItem | null;
-  onSave: (data: Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  item?: RecipeItem | null;
+  onSave: (data: Omit<RecipeItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onClose: () => void;
 }
 
@@ -26,25 +26,25 @@ const RANK_IDLE_COLORS = [
   'border-rose-200 text-rose-400 hover:border-rose-400',
 ];
 
-export default function ItemModal({ item, onSave, onClose }: Props) {
+export default function RecipeModal({ item, onSave, onClose }: Props) {
   const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
   const [url, setUrl] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [rank, setRank] = useState(3);
+  const [ingredients, setIngredients] = useState('');
   const [memo, setMemo] = useState('');
-  const [purchased, setPurchased] = useState(false);
+  const [cooked, setCooked] = useState(false);
 
   useEffect(() => {
     if (item) {
       setName(item.name);
-      setPrice(String(item.price));
       setUrl(item.url);
       setTags(item.tags);
       setRank(item.rank);
+      setIngredients(item.ingredients);
       setMemo(item.memo);
-      setPurchased(item.purchased);
+      setCooked(item.cooked);
     }
   }, [item]);
 
@@ -61,12 +61,12 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
     if (!name.trim()) return;
     onSave({
       name: name.trim(),
-      price: parseFloat(price) || 0,
       url: url.trim(),
       tags,
       rank,
+      ingredients: ingredients.trim(),
       memo: memo.trim(),
-      purchased,
+      cooked,
     });
   };
 
@@ -78,9 +78,9 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-indigo-900">
-            {item ? 'アイテムを編集' : 'アイテムを追加'}
+            {item ? '料理を編集' : '料理を追加'}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100">
+          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" aria-label="閉じる">
             <X size={20} />
           </button>
         </div>
@@ -88,35 +88,26 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           {/* 名前 */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              名前 <span className="text-red-500">*</span>
+            <label htmlFor="recipe-name" className="block text-sm font-medium text-slate-700 mb-1">
+              料理名 <span className="text-red-500">*</span>
             </label>
             <input
+              id="recipe-name"
               required
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="例: Sony WH-1000XM5"
+              placeholder="例: 麻婆豆腐"
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
 
-          {/* 値段 */}
+          {/* レシピURL */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">値段（円）</label>
+            <label htmlFor="recipe-url" className="block text-sm font-medium text-slate-700 mb-1">
+              レシピURL
+            </label>
             <input
-              type="number"
-              min="0"
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-              placeholder="例: 39800"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-          </div>
-
-          {/* URL */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">URL</label>
-            <input
+              id="recipe-url"
               type="url"
               value={url}
               onChange={e => setUrl(e.target.value)}
@@ -127,9 +118,12 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
 
           {/* タグ */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">タグ</label>
+            <label htmlFor="recipe-tag-input" className="block text-sm font-medium text-slate-700 mb-1">
+              タグ
+            </label>
             <div className="flex gap-2">
               <input
+                id="recipe-tag-input"
                 value={tagInput}
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addTag())}
@@ -140,6 +134,7 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
                 type="button"
                 onClick={addTag}
                 className="px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 text-sm"
+                aria-label="タグを追加"
               >
                 <Plus size={16} />
               </button>
@@ -149,7 +144,7 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
                 {tags.map(t => (
                   <span key={t} className="flex items-center gap-1 bg-indigo-100 text-indigo-700 text-xs px-2 py-1 rounded-full">
                     {t}
-                    <button type="button" onClick={() => removeTag(t)} className="hover:text-red-500">
+                    <button type="button" onClick={() => removeTag(t)} className="hover:text-red-500" aria-label={`タグ ${t} を削除`}>
                       <X size={12} />
                     </button>
                   </span>
@@ -158,10 +153,10 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
             )}
           </div>
 
-          {/* ランキング */}
+          {/* 作りたい度 */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              優先度 <span className="text-xs font-normal text-slate-400 ml-1">★5が最高優先</span>
+              作りたい度 <span className="text-xs font-normal text-slate-400 ml-1">★5が最高</span>
             </label>
             <div className="flex gap-2">
               {RANKS.map(r => (
@@ -169,6 +164,8 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
                   key={r}
                   type="button"
                   onClick={() => setRank(r)}
+                  aria-label={`作りたい度 ${r}`}
+                  aria-pressed={rank === r}
                   className={`w-10 h-10 rounded-full text-sm font-bold border-2 transition-all ${
                     rank === r
                       ? RANK_ACTIVE_COLORS[r]
@@ -181,27 +178,45 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
             </div>
           </div>
 
-          {/* メモ */}
+          {/* 材料メモ */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">メモ</label>
+            <label htmlFor="recipe-ingredients" className="block text-sm font-medium text-slate-700 mb-1">
+              材料メモ
+            </label>
             <textarea
-              value={memo}
-              onChange={e => setMemo(e.target.value)}
+              id="recipe-ingredients"
+              value={ingredients}
+              onChange={e => setIngredients(e.target.value)}
               rows={3}
-              placeholder="気になる点、比較メモなど..."
+              placeholder="必要な材料など..."
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
             />
           </div>
 
-          {/* 購入済み */}
+          {/* メモ */}
+          <div>
+            <label htmlFor="recipe-memo" className="block text-sm font-medium text-slate-700 mb-1">
+              メモ
+            </label>
+            <textarea
+              id="recipe-memo"
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              rows={3}
+              placeholder="気になる点、アレンジメモなど..."
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+            />
+          </div>
+
+          {/* 作った */}
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              checked={purchased}
-              onChange={e => setPurchased(e.target.checked)}
+              checked={cooked}
+              onChange={e => setCooked(e.target.checked)}
               className="w-4 h-4 rounded accent-indigo-600"
             />
-            <span className="text-sm text-gray-700">購入済みにする</span>
+            <span className="text-sm text-gray-700">作った済みにする</span>
           </label>
 
           {/* ボタン */}
