@@ -85,7 +85,11 @@ export default function ItemModal({ item, onSave, onClose }: Props) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="p-5 space-y-4"
+          style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+        >
           {/* 名前 */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">

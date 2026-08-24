@@ -94,7 +94,11 @@ export default function BookModal({ item, onSave, onClose }: Props) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form
+          onSubmit={handleSubmit}
+          className="p-5 space-y-4"
+          style={{ paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
+        >
           {/* 本を検索 */}
           <div className="bg-indigo-50/60 rounded-xl p-3 space-y-2">
             <label htmlFor="book-search-input" className="block text-sm font-medium text-slate-700">
