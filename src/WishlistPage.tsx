@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function WishlistPage({ user, onBack }: Props) {
-  const { items, upsert, remove, update } = useCollection<WishItem>(user.uid, subscribeItems, saveItems);
+  const { items, upsert, remove, update, saveError } = useCollection<WishItem>(user.uid, subscribeItems, saveItems);
   const [editItem, setEditItem] = useState<WishItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
@@ -61,6 +61,7 @@ export default function WishlistPage({ user, onBack }: Props) {
       itemCount={filtered.length}
       totalCount={items.length}
       onAdd={openAdd}
+      saveError={saveError}
       filterBar={
         <FilterBar
           tags={tags}

@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function BooksPage({ user, onBack }: Props) {
-  const { items, upsert, remove } = useCollection<BookItem>(user.uid, subscribeBooks, saveBooks);
+  const { items, upsert, remove, saveError } = useCollection<BookItem>(user.uid, subscribeBooks, saveBooks);
   const [editItem, setEditItem] = useState<BookItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
@@ -50,6 +50,7 @@ export default function BooksPage({ user, onBack }: Props) {
       itemCount={filtered.length}
       totalCount={items.length}
       onAdd={openAdd}
+      saveError={saveError}
       filterBar={
         <BookFilterBar
           tags={tags}

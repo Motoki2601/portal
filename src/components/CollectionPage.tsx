@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Plus, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft, AlertTriangle } from 'lucide-react';
 
 interface Props {
   title: string;
@@ -11,12 +11,13 @@ interface Props {
   filterBar?: ReactNode;
   footerExtra?: ReactNode;
   modal?: ReactNode;
+  saveError?: boolean;
   children: ReactNode;
 }
 
 export default function CollectionPage({
   title, onBack, emptyIcon, itemCount, totalCount, onAdd,
-  filterBar, footerExtra, modal, children,
+  filterBar, footerExtra, modal, saveError, children,
 }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-white to-slate-50">
@@ -58,6 +59,16 @@ export default function CollectionPage({
           children
         )}
       </main>
+
+      {/* 保存失敗トースト */}
+      {saveError && (
+        <div className="fixed bottom-24 left-0 right-0 z-50 flex justify-center px-4">
+          <div className="flex items-center gap-2 bg-rose-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
+            <AlertTriangle size={16} />
+            保存に失敗しました。通信状況を確認してください
+          </div>
+        </div>
+      )}
 
       {/* ボトムバー */}
       <div className="fixed bottom-0 left-0 right-0 z-40">

@@ -14,12 +14,21 @@ export function useCollection<T extends BaseItem>(
   save: (uid: string, items: T[]) => Promise<void>,
 ) {
   const [items, setItems] = useState<T[]>([]);
+  const [saveError, setSaveError] = useState(false);
 
-  useEffect(() => subscribe(uid, setItems), [uid]);
+  useEffect(() => subscribe(uid, setItems), [uid, subscribe]);
+
+  useEffect(() => {
+    if (!saveError) return;
+    const timer = setTimeout(() => setSaveError(false), 4000);
+    return () => clearTimeout(timer);
+  }, [saveError]);
 
   const persist = (next: T[]) => {
     setItems(next);
-    void save(uid, next);
+    save(uid, next)
+      .then(() => setSaveError(false))
+      .catch(() => setSaveError(true));
   };
 
   const upsert = (data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>, editItem: T | null) => {
@@ -41,5 +50,5 @@ export function useCollection<T extends BaseItem>(
     persist(items.map(i => (i.id === id ? { ...i, ...patch, updatedAt: now } : i)));
   };
 
-  return { items, persist, upsert, remove, update };
+  return { items, persist, upsert, remove, update, saveError };
 }

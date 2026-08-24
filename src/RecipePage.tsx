@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function RecipePage({ user, onBack }: Props) {
-  const { items, upsert, remove, update } = useCollection<RecipeItem>(user.uid, subscribeRecipes, saveRecipes);
+  const { items, upsert, remove, update, saveError } = useCollection<RecipeItem>(user.uid, subscribeRecipes, saveRecipes);
   const [editItem, setEditItem] = useState<RecipeItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
@@ -55,6 +55,7 @@ export default function RecipePage({ user, onBack }: Props) {
       itemCount={filtered.length}
       totalCount={items.length}
       onAdd={openAdd}
+      saveError={saveError}
       filterBar={
         <RecipeFilterBar
           tags={tags}
