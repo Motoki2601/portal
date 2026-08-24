@@ -77,12 +77,12 @@ export default function CollectionPage({
       )}
 
       {/* ボトムバー */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
+      <div
+        className="fixed bottom-0 left-0 right-0 z-40 px-4"
+        style={{ paddingBottom: 'max(1rem, calc(0.5rem + env(safe-area-inset-bottom)))' }}
+      >
         <div className="max-w-2xl mx-auto">
-          <div
-            className="bg-white/90 backdrop-blur-md border-t border-indigo-100/60 shadow-[0_-4px_24px_rgba(67,56,202,0.10)] px-5 pt-3 flex items-center justify-between gap-4"
-            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-          >
+          <div className="bg-white/95 backdrop-blur-md border border-indigo-100/60 shadow-[0_4px_24px_rgba(67,56,202,0.15)] rounded-2xl px-5 py-3 flex items-center justify-between gap-4">
             {/* 件数 */}
             <div>
               <p className="text-xs text-slate-400 leading-none mb-0.5">リスト</p>
