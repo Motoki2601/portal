@@ -35,7 +35,10 @@ export default function CollectionPage({
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 pt-5 pb-28 space-y-4">
+      <main
+        className="max-w-2xl mx-auto px-4 pt-5 space-y-4"
+        style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}
+      >
         {/* フィルタバー */}
         {totalCount > 0 && filterBar}
 
@@ -62,7 +65,10 @@ export default function CollectionPage({
 
       {/* 保存失敗トースト */}
       {saveError && (
-        <div className="fixed bottom-24 left-0 right-0 z-50 flex justify-center px-4">
+        <div
+          className="fixed left-0 right-0 z-50 flex justify-center px-4"
+          style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom))' }}
+        >
           <div className="flex items-center gap-2 bg-rose-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
             <AlertTriangle size={16} />
             保存に失敗しました。通信状況を確認してください
@@ -73,7 +79,10 @@ export default function CollectionPage({
       {/* ボトムバー */}
       <div className="fixed bottom-0 left-0 right-0 z-40">
         <div className="max-w-2xl mx-auto">
-          <div className="bg-white/90 backdrop-blur-md border-t border-indigo-100/60 shadow-[0_-4px_24px_rgba(67,56,202,0.10)] px-5 py-3 flex items-center justify-between gap-4">
+          <div
+            className="bg-white/90 backdrop-blur-md border-t border-indigo-100/60 shadow-[0_-4px_24px_rgba(67,56,202,0.10)] px-5 pt-3 flex items-center justify-between gap-4"
+            style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+          >
             {/* 件数 */}
             <div>
               <p className="text-xs text-slate-400 leading-none mb-0.5">リスト</p>
