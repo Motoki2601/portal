@@ -148,39 +148,29 @@ MVPでは秒単位リアルタイム分析は不要。
 - Cloud RunのAdmin SDKアクセスはSecurity Rulesをバイパスするため、API側認可を必須にする。
 - App CheckはMVP着手の必須条件にはしない。公開運用前の追加防御として再評価する。
 
-### Firestore Rules
-生活データで `users/{uid}/inventoryEvents/{eventId}` 等をフロントから直接操作する場合は現行Rulesでも2階層サブコレクションに適用できるが、MVPでは生活データ書込をCloud Run APIに寄せる。
-将来さらに深いパスを追加する場合はRulesを明示的に追加する。
-
 ## 11. IAM / Service Account
-MVPでは**Cloud Run用専用Service Accountを1つ**作り、デフォルトCompute Service AccountやOwner/Editor権限を使わない。
+MVPではCloud Run用専用Service Accountを作り、デフォルトCompute Service AccountやOwner/Editor権限を使わない。
 
-Cloud Run runtime SAの必要権限方針:
-- Firestore: 対象プロジェクトのFirestoreデータ読書きに必要な最小ロール
-- Cloud Storage: raw専用bucketのObject read/write。bucket管理権限は付与しない
-- BigQuery: 対象datasetへのjob実行 + 必要datasetのread/write。project全体のData Ownerは付与しない
-- Logging/Monitoring: Cloud Run標準のログ出力に必要な範囲
+runtime SA:
+- Firestore: 必要なデータread/writeのみ
+- Cloud Storage: raw専用bucketのObject read/writeのみ
+- BigQuery: 必要datasetのread/write + job実行のみ
+- project全体のData Owner等は付与しない
 
 デプロイ主体とruntime主体を分離する。
-- runtime SA: アプリ実行時だけ必要なデータ権限
-- deploy権限: Cloud Run更新、Service Account利用等。GitHub Actions導入時はWorkload Identity Federationを優先し、長期Service Account key JSONをGitHub Secretsへ置かない
-
-秘密値をコードやGitHub公開リポジトリへ保存しない。
+GitHub Actions導入時はWorkload Identity Federationを優先し、長期Service Account key JSONをGitHub Secretsへ置かない。
 
 ## 12. dev / prod分離
-MVPでは**同一GCP project内で論理分離して開始**する。個人利用初期に別projectを2つ維持する運用コストを避ける。
+MVPでは同一GCP project内で論理分離して開始する。
 
-分離方法:
-- Cloud Run service: `portal-household-api-dev` / `portal-household-api-prod`
-- Cloud Storage bucket: dev/prodを別bucketにする
-- Firestore: productionデータとfixture/testデータのcollection namespaceを混在させない。ローカル/自動テストはFirebase Emulatorを優先する
-- BigQuery: `household_dev` / `household_prod` datasetを分離
+- Cloud Run: `portal-household-api-dev` / `portal-household-api-prod`
+- Cloud Storage: dev/prodで別bucket
+- Firestore: 本番データとfixture/testデータを混在させず、ローカル/自動テストはFirebase Emulatorを優先
+- BigQuery: `household_dev` / `household_prod`
 - 環境変数・CORS・service accountをdev/prodで分離
-- 本番rawデータをdevへコピーしない。fixtureは匿名ダミーデータのみ
+- 本番rawをdevへコピーしない
 
-将来、複数ユーザー化・CI/CD高度化・誤操作リスク増大時に、prodを別GCP projectへ分離する。
-
-優先順位が「強い環境隔離」なら最初から別projectが有利だが、現段階では運用簡素化を優先して同一project論理分離を採用する。
+複数ユーザー化、CI/CD高度化、誤操作リスク増大時にprod別projectを再評価する。
 
 ## 13. バックアップ/復元
 優先順位:
@@ -188,54 +178,50 @@ MVPでは**同一GCP project内で論理分離して開始**する。個人利�
 2. Firestore operational record / inventory event履歴
 3. BigQuery派生データ
 
-BigQuery派生データは再生成可能にする。
-現在状態もinventory_eventから再構築できるようにする。
+BigQuery派生データは再生成可能にし、現在状態もinventory_eventから再構築できるようにする。
 
 ## 14. 候補比較
 ### Firestoreだけ
-有利: サービス数・実装量を最小化したい場合。
-不利: 大量の横断分析・多対多突合SQLが増えると実装が煩雑。
+有利: サービス数・実装量の最小化。
+不利: 横断分析・多対多突合が増えると実装が煩雑。
 
 ### Firestore + BigQuery + Storage + Cloud Run（採用）
-有利: 既存Portalを壊さず、operationalとanalyticsを分離できる。
-不利: サービス数とIAM/監視対象が増える。
+有利: 既存Portalを壊さずoperationalとanalyticsを分離。
+不利: サービス数とIAM/監視対象は増える。
 
 ### PostgreSQL/Supabase/Cloud SQL
-有利: JOIN、外部キー、一意制約、複雑なOLTPを単一RDBで厳密に扱いたい場合。
-不利: 今回の個人MVPでは新DB運用・認証統合コストが先に発生する。
+有利: JOIN・外部キー・一意制約を単一RDBで厳密に扱う場合。
+不利: 個人MVPでは新DB運用・認証統合コストが先に発生。
 
 ### 全面移行
 有利: 最終的な基盤統一。
 不利: MVP価値に対して移行工数が過大。
-
-「MVPを早く動かす」「既存ログイン/機能を壊さない」「後から分析を拡張する」を優先し、Firestore write model + GCP分析系を採る。
 
 ## 15. 費用前提
 個人利用MVPの仮定:
 - 1ユーザー
 - inventory event: 100〜1,000件/月
 - API: 数百〜数千request/月
-- rawファイル: 数十〜数百MB、将来1GB程度
+- raw: 数十〜数百MB、将来1GB程度
 - BigQuery query: 数GB〜数十GB/月
 
 目標月額は0〜数百円。請求ゼロは保証しない。
-現在はSparkプランのため、Cloud Run / Cloud Storage / BigQueryを使う実装前にCloud Billingを有効化する。
-有効化直後にBudget Alertを設定する。
+現在はSparkのため、Cloud Run / Cloud Storage / BigQuery利用前にCloud Billingを有効化し、直後にBudget Alertを設定する。
 
 ## 16. リージョン
-Firestoreが `asia-northeast1` のため、以下を第一候補とする。
+Firestoreが `asia-northeast1` のため以下を第一候補とする。
 - Cloud Run: `asia-northeast1`
-- Cloud Storage: 東京リージョン
-- BigQuery: 東京リージョン
+- Cloud Storage: 東京
+- BigQuery: 東京
 
-可能な範囲で同一地域へ寄せ、レイテンシとリージョン間転送を抑える。
+可能な範囲で同一地域へ寄せる。
 
 ## 17. 撤回可能性
 - 既存Wishlist等を変更しない
 - 新生活データはcollection/API境界を分離
-- BigQueryは派生先なので削除してもoperational dataは残る
+- BigQueryは派生先
 - export可能なJSON/CSV形式を持つ
-- 将来RDBが必要になった場合もCloud Run APIの背後を置換しやすくする
+- 将来RDBが必要でもCloud Run APIの背後を置換できるようにする
 
 ## 18. Amazon待ちでも進められる範囲
 Amazonに依存しない:
