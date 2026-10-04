@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { createCsvImporter } from '../amazon-csv.mjs';
+import { createCsvImporter, identity } from '../amazon-csv.mjs';
 import { csvFixture } from './csv-fixture.mjs';
 
 test('CSV transactions: concurrent retry, overrides, Gmail matching and review', async t => {
@@ -17,6 +17,17 @@ test('CSV transactions: concurrent retry, overrides, Gmail matching and review',
   assert.equal((await root.collection('purchaseOrders').get()).size, 1);
   assert.equal((await root.collection('purchaseLines').get()).size, 2);
   assert.equal((await root.collection('auditLogs').get()).size, 4);
+  const keys = (await root.collection('identityKeys').get()).docs.map(d => d.data());
+  for (const key of keys) {
+    assert.equal(key.schemaVersion, 1);
+    assert(key.createdAt && key.target?.collection && key.target?.id);
+    assert(['order', 'amazon_csv_attempt'].includes(key.kind));
+  }
+  assert.equal(keys.find(k => k.kind === 'amazon_csv_attempt').target.id, a.sourceId);
+  const firstSource = (await root.collection('sources').doc(a.sourceId).get()).data();
+  assert.equal(firstSource.scope, 'order');
+  assert.equal(firstSource.sourceOrderKey, proposal.order.orderKey);
+  assert.deepEqual(firstSource.orderIds, [a.orderId]);
   const reordered = Object.fromEntries(Object.entries(proposal).reverse());
   assert.deepEqual(await importCsv(uid, reordered, 'c'), a);
   const changedAttempt = structuredClone(proposal); changedAttempt.order.lines[0].rawProductName = '別の架空商品';
@@ -76,6 +87,35 @@ test('CSV transactions: concurrent retry, overrides, Gmail matching and review',
   qtyConflict.order.lines[0].quantity = 2;
   assert.equal((await importCsv(gmailUid, qtyConflict, 'quantity')).status, 'needs_review');
   assert.equal((await gmailRoot.collection('purchaseLines').doc('gmail-line').get()).data().quantity, 1);
+  const recoveryUid = uid + '-recovery'; const recoveryRoot = db.collection('users').doc(recoveryUid);
+  const missingFiles = csvFixture('recovery', 1, true);
+  const completeFiles = csvFixture('recovery');
+  assert.equal(missingFiles.source.sourceId, completeFiles.source.sourceId);
+  const incomplete = await importCsv(recoveryUid, missingFiles, 'missing-files');
+  assert.equal(incomplete.status, 'needs_review');
+  const completed = await importCsv(recoveryUid, completeFiles, 'files-supplied');
+  assert.equal(completed.status, 'imported');
+  assert.deepEqual(completed.lineIds, incomplete.lineIds);
+  assert.notEqual(completed.sourceId, incomplete.sourceId);
+  assert.equal((await recoveryRoot.collection('purchaseLines').doc(completed.lineIds[0]).get()).data().status, 'ordered');
+  const priorSource = (await recoveryRoot.collection('sources').doc(incomplete.sourceId).get()).data();
+  assert.deepEqual(priorSource.fileHashes, missingFiles.source.fileHashes);
+  assert.equal(priorSource.status, 'needs_review');
+  const changedRelated = structuredClone(completeFiles);
+  changedRelated.source.fileHashes['Your Returns & Refunds/Refund Details.csv'] = identity('synthetic-new-refund-file');
+  changedRelated.importBatchKey = identity('amazon_csv_batch', changedRelated.source.accountKey, Object.entries(changedRelated.source.fileHashes).sort(([a], [b]) => a < b ? -1 : 1));
+  const priorCompleteSource = (await recoveryRoot.collection('sources').doc(completed.sourceId).get()).data();
+  const rechecked = await importCsv(recoveryUid, changedRelated, 'related-files-changed');
+  assert.notEqual(rechecked.sourceId, completed.sourceId);
+  assert.deepEqual((await recoveryRoot.collection('sources').doc(completed.sourceId).get()).data(), priorCompleteSource);
+  assert.equal((await recoveryRoot.collection('purchaseOrders').get()).size, 1);
+  assert.equal((await recoveryRoot.collection('purchaseLines').get()).size, 1);
+  const returnedToActive = structuredClone(returned);
+  returnedToActive.source.fileHashes['Your Returns & Refunds/Refund Details.csv'] = identity('another-refund-snapshot');
+  returnedToActive.importBatchKey = identity('amazon_csv_batch', returnedToActive.source.accountKey, Object.entries(returnedToActive.source.fileHashes).sort(([a], [b]) => a < b ? -1 : 1));
+  returnedToActive.order.status = 'ordered';
+  Object.assign(returnedToActive.order.lines[0], { status: 'ordered', disposition: 'accepted', reasonCodes: [], cycleEligibleAfterProductMatch: true });
+  assert.equal((await importCsv(uid + '-return', returnedToActive, 'unsafe-return-restore')).status, 'needs_review');
   await assert.rejects(importCsv('../other', proposal, 'bad-uid'), e => e.code === 'FORBIDDEN');
   assert.equal((await root.collection('purchaseOrders').get()).size, 1);
 });

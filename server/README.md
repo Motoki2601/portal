@@ -120,7 +120,11 @@ node server/import-amazon-json.mjs /private/orders.json https://API_HOST /privat
 
 全注文を事前に型検証し、HTTPは逐次実行。成功件数だけを表示し、token・商品名・注文IDはログに出さない。DBの原子性は注文単位であり、ファイル全体ではない。途中失敗時は同じ入力を再実行できる。同batch＋orderの同内容再送はno-op、内容違いは409。返品CSVだけが変化したbatchも再評価する。
 
-order identity予約・注文/明細・Source・試行結果・監査をtransactionで保存する。CSVが変わっても同SKUの一意な既存明細を利用し、source行番号を最終line IDにしない。userOverrides・既存商品照合・既知の金額は維持する。旧batchの再送は既存の結果を返すため、その後の取消更新を巻き戻さない。
+order identity予約・注文/明細・Source・試行結果・監査をtransactionで保存する。保存Sourceは`scope=order`、IDは全fileHashes由来のbatch＋注文キーで生成し、ファイル集合ごとの根拠を固定する。関連CSVだけの変更も別Sourceになる。Python提案のhistory単位sourceIdはinputSourceIdとして保持し、保存する注文/明細/fieldOrigins/監査は注文単位Sourceへ参照を付け替える。
+
+Source.status/importedAtはこの注文の処理状態であり、ZIP全体の完了を表さない。途中停止でも未処理注文のSourceを取込済みとは記録しない。ファイル全体の進捗はCLIのprocessed/imported/needsReview件数で示し、バッチ全体の完了documentは作らない。CSVが変わっても同SKUの一意な既存明細を利用し、source行番号を最終line IDにしない。userOverrides・既存商品照合・既知の金額は維持する。旧batchの再送は既存の結果を返すため、その後の取消更新を巻き戻さない。
+
+`unknown→ordered`は、前回の確認理由が関連CSV欠損だけで、今回それが解消され数量も一致する場合に限り自動反映する。返品/交換/未確定状態や取消からの復帰は引き続き確認待ち。
 
 Gmail注文は、一意な同SKU＋同名称＋同数量＋同状態の既存明細へ対応できる場合だけ統合する。本文注文日との矛盾・状態/数量矛盾・SKUなし/同SKU複数行・購入日不明はSourceのみneeds_reviewとし、注文/明細は更新しない。受信日fallbackはCSVの実注文日で置換可能。CSV内の返品/未確定明細はunknown、取消はcancelled、無償交換はunknownで保存し、有効購入と数えない。
 

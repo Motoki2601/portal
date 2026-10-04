@@ -65,6 +65,7 @@ line.statusはacceptedのみordered、取消はcancelled、それ以外unknown�
 返却は `{contractVersion, importBatchKey, summary, source, orders[]}` の**保存候補**。DB documentではない。共通revision/Timestamp/監査/lineIdはサーバー側で付ける。
 
 - sourceId: SHA-256(JSON配列["v1","amazon_csv",accountKey,historyFileHash])。行根拠はファイル相対パスとCSV論理レコード番号（ヘッダを1とする）。
+- 上記はオフライン提案ID。API保存ではhash(["v1","amazon_csv_order_source",accountKey,importBatchKey,orderKey])をSource IDにし、提案IDはinputSourceIdへ。注文/明細/fieldOrigins/監査の参照も保存IDへ付け替える。Source.scope=orderによりstatus/importedAtは1注文の状態を示す。全fileHashesはこのSource内で固定し、関連CSV変更は新Sourceへ保存する。ZIP全体の完了状態はSourceに記録しない。
 - importBatchKey: 関連ファイルも含むsorted fileHashesのhash。返品CSV等だけ変化しても新しい検証試行が必要。sourceIdだけを理由に再評価を飛ばさない。
 - orderKey: SHA-256(["v1","order","amazon",merchantAccountKey,externalOrderId])。Gmailと共通。JSONはUTF-8・空白なし・ensure_ascii=false。
 - lineMatchKey: orderKey+ASINによる**照合ヒント**。外部明細IDではなく、Firestore lineIdにも採用しない。複数行は確認待ち。
@@ -72,7 +73,7 @@ line.statusはacceptedのみordered、取消はcancelled、それ以外unknown�
 - CSVの実注文日はGmail受信日のfallbackより根拠が強い。訂正なしの同一注文で差異がある場合、サーバーはCSV日付への変更を監査する。本文注文日との矛盾、数量/状態の矛盾は確認待ち。取込順で上書きしない。
 - ユーザーoverrideは最優先。CSVはoverrideを出力せず、保存処理はexisting userOverridesを維持する。取消/返品/交換の新根拠で既存周期入力が変わる場合は再評価する。
 
-以上のマージ・訂正維持規則は後続保存処理への契約で、このCLIによる実装済み保証ではない。
+以上のマージ・訂正維持規則は認証付き保存APIで検証する。オフライン変換CLI単体はDBを操作しない。unknownからの自動復帰は前回の理由が関連CSV欠損だけの場合に限定し、返品等の確認待ちを無条件解除しない。
 
 ## 検証結果（2026-10-05）
 

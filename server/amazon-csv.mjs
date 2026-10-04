@@ -93,7 +93,9 @@ export function validateProposal(body) {
 export function createCsvImporter(db, now = () => new Date()) {
   return async (uid, body, requestId) => {
     if (typeof uid !== 'string' || !uid || uid.includes('/') || uid.length > 128 || ['.', '..'].includes(uid)) throw new AppError('FORBIDDEN', 'Invalid authenticated uid', 403);
-    const { s, o, sourceId, batch, inputHash } = validateProposal(body);
+    const { s, o, sourceId: inputSourceId, batch, inputHash } = validateProposal(body);
+    // Stored evidence is one immutable file-set/order slice, never the whole upload.
+    const sourceId = identity('amazon_csv_order_source', s.accountKey, batch, o.orderKey);
     const root = db.collection('users').doc(uid);
     const attempt = root.collection('identityKeys').doc(identity('amazon_csv_attempt', batch, o.orderKey));
     const reservation = root.collection('identityKeys').doc(o.orderKey);
@@ -128,7 +130,10 @@ export function createCsvImporter(db, now = () => new Date()) {
         const matches = existing.filter(d => d.data().identifiers?.merchantSku === l.identifiers.merchantSku);
         if (matches.length > 1 || (oldOrder && !sameCsv && matches.length !== 1)) { review.push('unresolved_existing_line'); continue; }
         const previous = matches[0]?.data();
-        if (previous && l.status === 'ordered' && (previous.status !== 'ordered' || previous.quantity !== l.quantity)) { review.push('line_restore_or_quantity_conflict'); continue; }
+        const resolvedMissingFiles = previous?.status === 'unknown' && previous.csvDisposition === 'needs_review'
+          && previous.csvReasonCodes?.length === 1 && previous.csvReasonCodes[0] === 'missing_return_or_replacement_files'
+          && l.disposition === 'accepted';
+        if (previous && l.status === 'ordered' && ((previous.status !== 'ordered' && !resolvedMissingFiles) || previous.quantity !== l.quantity)) { review.push('line_restore_or_quantity_conflict'); continue; }
         if (previous && (previous.rawProductName !== l.rawProductName || (!previous.csvDisposition && (previous.quantity !== l.quantity || previous.status !== l.status)))) { review.push('line_fact_conflict'); continue; }
         // Do not infer a line correspondence from source row position or a name.
         const ref = matches[0]?.ref ?? root.collection('purchaseLines').doc(randomUUID());
@@ -147,17 +152,17 @@ export function createCsvImporter(db, now = () => new Date()) {
       if (!held) {
         const fields = { merchant: 'amazon', merchantAccountKey: s.accountKey, externalOrderId: o.externalOrderId, orderedOn: o.orderedOn, dateTimezone: 'Asia/Tokyo', orderDateBasis: 'csv_order_date', identityStatus: 'confirmed', status: o.status, sourceId, fieldOrigins: { ...oldOrder?.fieldOrigins, orderedOn: { kind: 'source', sourceId }, status: { kind: 'source', sourceId } }, replacementOfOrderKeys: o.replacementOfOrderKeys };
         save(orderRef, oldOrder, fields);
-        if (!keySnap.exists) tx.create(reservation, { target, createdAt: clock });
+        if (!keySnap.exists) tx.create(reservation, { kind: 'order', schemaVersion: 1, target, createdAt: clock });
         for (const { ref, previous, l } of updates) {
-          const fieldOrigins = { ...previous?.fieldOrigins, ...l.fieldOrigins };
+          const fieldOrigins = { ...previous?.fieldOrigins, ...Object.fromEntries(Object.keys(l.fieldOrigins).map(field => [field, { kind: 'source', sourceId }])) };
           if (previous?.amountMinor != null && previous.fieldOrigins?.currency) fieldOrigins.currency = previous.fieldOrigins.currency;
           save(ref, previous, { orderId: target.id, sourceId, sourceLineRef: l.sourceLineRef, rawProductName: l.rawProductName, quantity: l.quantity, amountMinor: previous?.amountMinor ?? null, currency: previous?.amountMinor != null ? previous.currency : l.currency, status: l.status, productId: previous?.productId ?? null, matchMethod: previous?.matchMethod ?? 'unmatched', identifiers: { ...previous?.identifiers, ...l.identifiers }, fieldOrigins, csvDisposition: l.disposition, csvReasonCodes: l.reasonCodes, csvOrderDateEvidence: l.orderDateEvidence });
         }
       }
       const oldSource = sourceSnap.exists ? sourceSnap.data() : null;
       const orderIds = [...new Set([...(oldSource?.orderIds ?? []), ...(held ? [] : [target.id])])].sort();
-      save(source, oldSource, { provider: 'amazon_csv', accountKey: s.accountKey, fileHashes: s.fileHashes, extractionVersion: 'amazon-csv-v1', status: oldSource?.status === 'needs_review' ? 'needs_review' : result.status, orderIds, attemptCount: (oldSource?.attemptCount ?? 0) + 1, lastAttemptAt: clock, importedAt: held ? oldSource?.importedAt ?? null : clock });
-      tx.create(attempt, { createdAt: clock, kind: 'amazon_csv_attempt', inputHash, result });
+      save(source, oldSource, { provider: 'amazon_csv', scope: 'order', accountKey: s.accountKey, inputSourceId, importBatchKey: batch, sourceOrderKey: o.orderKey, fileHashes: s.fileHashes, extractionVersion: 'amazon-csv-v1', status: result.status, orderIds, attemptCount: (oldSource?.attemptCount ?? 0) + 1, lastAttemptAt: clock, importedAt: held ? null : clock });
+      tx.create(attempt, { schemaVersion: 1, createdAt: clock, kind: 'amazon_csv_attempt', target: { collection: 'sources', id: sourceId }, inputHash, result });
       for (const audit of audits) tx.create(root.collection('auditLogs').doc(randomUUID()), audit);
       return result;
     });
