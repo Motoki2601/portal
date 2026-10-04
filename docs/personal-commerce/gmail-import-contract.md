@@ -12,7 +12,7 @@
 
 同一注文の確認/出荷メールで注文番号が一致することを確認。Gmail上は別message IDであり、thread IDで注文を一意にすることはできない。取得結果をFirestoreへ登録する実装・同時実行の検証は#16以降。
 
-Amazon注文確認1通のtext/plainには注文番号・商品・数量・金額があるが、本文の購入日の明記がなかった。受信日時で補完すると設計の「推測で事実を埋めない」方針に反するため、Amazonは今回の確定経路から外す。HTML/別メール/別入力から購入日を取得できるかは追加調査であり、Amazon全メールに日付がないという結論ではない。
+Amazon注文確認1通のtext/plainには注文番号・商品・数量・金額があるが、本文の購入日の明記がなかった。当初は購入日欠損として扱ったが、2026-10-05にユーザーが「注文済みメールの受信日を購入日としてよい」と指定したため、以下のAmazonルールで解決する。Amazon全メールに本文注文日がないという結論ではない。
 
 実際の複数商品注文・分割発送・キャンセル・返品は未検証。キャンセル等の件名検索では0件だったが、対象事象がないと断定しない。合成fixtureにより複数行・欠損の契約を用意する。MVPの未対応形式はneeds_reviewで保持し、黙って商品を追加/削除しない。
 
@@ -58,7 +58,7 @@ from:otodoke@yodobashi.com subject:"ご注文商品出荷のお知らせ"
 | 【ご注文金額】今回のお買い物合計金額 | totalMinor / currency | 任意。ポイント支払分を商品価格から引かない |
 | 商品名中の容量/包装/型番 | Product属性候補 | AIが根拠ありの値だけ抽出。JANやSKUがない場合は未取得 |
 
-注文日/商品名は必須。注文番号が不明ならprovisional/needs_review、周期対象外。購入日が不明ならPurchaseOrderを作らずSourceのみneeds_review。商品名のない明細もneeds_review。数量/明細金額はnull許容、金額非nullならcurrency必須。注文合計だけを明細価格へ配賦しない。
+注文日/商品名は必須。注文番号が不明ならprovisional/needs_review、周期対象外。購入日が不明ならPurchaseOrderを作らずSourceのみneeds_review。ただしAmazon物品注文確認には以下の受信日ルールを適用する。商品名のない明細もneeds_review。数量/明細金額はnull許容、金額非nullならcurrency必須。注文合計だけを明細価格へ配賦しない。
 
 支払額、ポイント数、配送料を商品金額に混同しない。複数商品で商品と数量行の対応が一意でない場合、保存せずneeds_reviewとする。AIは機械検証を通る構造のみ提出する。
 
@@ -92,13 +92,25 @@ fixtureの注文番号、商品名、金額、日付、message IDはすべて新
 
 実データについては5注文＋1発送のMIME復号/注文日/商品ブロック/数量を確認した。匿名fixture JSON構文・行対応・quantity=2時の合計値を検証。AI providerによる抽出精度、Firestore保存/競合、週次処理は未実施。
 
-## 6. 残る実装と追加調査
+## 6. Amazon購入日ルール（ユーザー指定、2026-10-05）
+
+対象は物品注文のauto-confirm@amazon.co.jpからの「注文済み」確認メール。実確認済みの件名は「注文済み:…」。検索候補は `from:auto-confirm@amazon.co.jp subject:注文済み`。送信元・件名・本文の注文確認/注文番号/商品ブロックを検証し、発送/広告等を除外する。
+
+- 本文に注文日がある場合はそれを優先しorderDateBasis=body。
+- 本文注文日がない場合はGmail internalDateをAsia/Tokyoへ変換しYYYY-MM-DDにする。orderDateBasis=gmail_received_date。
+- fieldOrigins.orderedOn={kind:"rule",sourceId,methodVersion:"amazon-received-date-v1"}。ユーザー指定の業務ルールの適用であり、本文記載の事実として偽装しない。
+- Dateヘッダー・thread日時・処理当日・発送通知の受信日を代用しない。
+- receivedAtは元のUTC Timestampを保持。受信遅延や日付境界によるずれは後からCorrectionで訂正し、周期を再計算する。
+- 転送/移行メール、Kindle/Prime Video等のデジタル注文は今回のルールの対象外。
+- 既に確認したAmazon物品注文メール1通は注文番号・商品3行・数量/金額をtext/plainから取得できた。このルールにより本文日付欠損を解消できる。Amazon全形式・数量2時の金額意味・返品/分割発送の検証完了は意味しない。
+
+## 7. 残る実装と追加調査
 
 #13の「1系統の変換項目・重複キー・匿名fixture」の完了条件は満たした。最初の実装はヨドバシorder/dispatchに限定する。
 
 #16へ: アプリ側Gmail OAuth、raw MIME復号、AI構造化＋型/根拠検証、Firestore限定書込み。今回ユーザーの追加入力は不要。
 
-追加検証: 実際の複数商品/分割発送/キャンセル/返品、Amazonの本文購入日を取得する経路。これらは未対応形式を自動計上しない運用で切り分ける。実データが必要になった時点で確認する。
+追加検証: 実際の複数商品/分割発送/キャンセル/返品、Amazonの検索条件・他形式と数量/価格の意味。購入日欠損は上記ユーザー指定ルールで解決する。これらは未対応形式を自動計上しない運用で切り分ける。実データが必要になった時点で確認する。
 
 公式仕様:
 - [Message/raw/internalDate](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages)
