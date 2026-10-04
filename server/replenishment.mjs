@@ -41,11 +41,11 @@ export function calculateReplenishment({ orders, lines, products, states }, now 
     if (state.usage === 'not_current') { eligible = false; reasonCodes.push('not_current'); }
     // A newer purchase of another product in a known category supersedes inferred use.
     const ownLast = dates(own).at(-1), categoryLast = dates(category).at(-1);
-    if (state.usage !== 'current' && ownLast && categoryLast && categoryLast > ownLast) { eligible = false; reasonCodes.push('newer_category_product'); }
+    if (!(state.usage === 'current' && state.usageOrigin === 'user') && ownLast && categoryLast && categoryLast > ownLast) { eligible = false; reasonCodes.push('newer_category_product'); }
     const suppressUntil = iso(state.suppressUntil);
     const suppressed = state.origin === 'user' && ['likely_available', 'spare_available'].includes(state.state) && suppressUntil && Date.parse(suppressUntil) > now.getTime();
     if (suppressed) { eligible = false; reasonCodes.push('user_suppressed'); }
-    const explicitEmpty = state.origin === 'user' && state.state === 'out_of_stock' && state.usage === 'current';
+    const explicitEmpty = state.origin === 'user' && state.state === 'out_of_stock' && state.usage === 'current' && state.usageOrigin === 'user';
     if (!explicitEmpty && (notifyFrom === null || asOf < notifyFrom)) { eligible = false; reasonCodes.push(notifyFrom === null ? 'insufficient_history' : 'not_due'); }
     if (eligible) reasonCodes.push(explicitEmpty ? 'user_out_of_stock' : 'cycle_due');
     if (state.origin === 'user' && ['likely_available', 'spare_available'].includes(state.state) && !suppressed) reasonCodes.push('past_available_observation');
