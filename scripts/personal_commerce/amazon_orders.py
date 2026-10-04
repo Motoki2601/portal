@@ -26,6 +26,7 @@ REQUIRED = {
     REPLACEMENTS: {"Order ID", "Replacement Order ID"},
 }
 MAX_FILE_BYTES = 16 * 1024 * 1024
+MAX_SAFE_QUANTITY = 2**53 - 1  # Exact JSON number across Python and the Node API.
 
 
 class ImportErrorCode(ValueError):
@@ -132,6 +133,17 @@ def normalize(tables, hashes, account_key):
             asin, name = text(row["ASIN"]), text(row["Product Name"])
             ordered_on, original_timestamp = None, text(row["Order Date"])
             try:
+                # fromisoformat normalizes malformed offsets such as +09:99.
+                # Validate the export timestamp syntax before timezone conversion.
+                if not original_timestamp or not re.fullmatch(
+                    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+                    r"(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+                    original_timestamp,
+                ):
+                    raise ValueError()
+                if original_timestamp[-1] != "Z":
+                    if int(original_timestamp[-5:-3]) > 23 or int(original_timestamp[-2:]) > 59:
+                        raise ValueError()
                 dt = datetime.fromisoformat(original_timestamp.replace("Z", "+00:00"))
                 if dt.tzinfo is None or dt.utcoffset() is None:
                     raise ValueError()
@@ -141,7 +153,7 @@ def normalize(tables, hashes, account_key):
                 reasons.append("invalid_order_date")
             try:
                 q = number(row["Original Quantity"])
-                if q is None or q != q.to_integral_value():
+                if q is None or q != q.to_integral_value() or q > MAX_SAFE_QUANTITY:
                     raise ValueError()
                 quantity = int(q) if q > 0 else None
                 if q == 0:

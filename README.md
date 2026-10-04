@@ -33,3 +33,8 @@ npm run build
 ## デプロイ
 
 `main` ブランチへのpushで GitHub Actions (`.github/workflows/deploy.yml`) が GitHub Pages へ自動デプロイする。
+
+## Personal Commerce API
+
+認証・購入履歴取得・商品状態の記録を行うサーバーを追加。[server/README.md](server/README.md)にローカル実行・匿名fixture・検証・デプロイ手順を記載。
+

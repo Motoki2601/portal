@@ -34,10 +34,10 @@ account-keyは後続Gmail取込と共通のmerchantAccountKey（内部UUID）を
 | 元項目 | 出力 | 判断 |
 |---|---|---|
 | Order ID | externalOrderId / orderKey | 既存設計と同じorder identity hash |
-| Order Date | orderedOn / orderDateEvidence | timezone付きISO→Asia/Tokyo日付。元timestamp保持 |
+| Order Date | orderedOn / orderDateEvidence | YYYY-MM-DDTHH:mm:ss（小数秒1〜6桁は任意）＋Z/±HH:mm→Asia/Tokyo日付。不正な時差は補正せず確認待ち。元timestamp保持 |
 | ASIN | identifiers.merchantSku | amazon + account + ASINでscope |
 | Product Name | rawProductName | 原名。商品照合は後続、productId=null |
-| Original Quantity | quantity | 正整数。0/欠損/不正はnull＋理由、1補完なし |
+| Original Quantity | quantity | 1〜2^53−1の整数。Node APIで精度を保てない値・0/欠損/不正はnull＋理由、1補完なし |
 | Currency | currency | v1はJPYのみ。他通貨は確認待ち |
 | 価格項目 | amountMinor=null | 単価/小計等の意味が未検証のため全件未確定 |
 
@@ -76,7 +76,7 @@ line.statusはacceptedのみordered、取消はcancelled、それ以外unknown�
 
 ## 検証結果（2026-10-05）
 
-完全合成unittest 18ケースと実ZIPで検証。実データ由来fixture/hash/商品名はリポジトリへ含めない。
+初回の完全合成unittest 18ケースと実ZIPで検証。レビューで不正な時差・有効な時差/小数秒・数量の整数精度の3ケースを追加（計21ケース）。実データ由来fixture/hash/商品名はリポジトリへ含めない。
 
 - 312注文 / 424明細
 - accepted 397 / excluded 19 / needs_review 8

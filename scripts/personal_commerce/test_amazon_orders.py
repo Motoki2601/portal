@@ -43,6 +43,32 @@ class AmazonOrdersTests(unittest.TestCase):
         self.assertEqual(out["summary"]["orders"], 1)
         self.assertEqual(out["orders"][0]["lines"][0]["quantity"], 2)
 
+    def test_malformed_timezone_is_not_normalized_into_a_purchase_date(self):
+        for timestamp in ("2026-09-01T00:00:00+09:99", "2026-09-01T00:00:00-01:60",
+                          "2026-09-01T00:00:00+24:00", "2026-09-01T00:00:00+09:00:99"):
+            with self.subTest(timestamp=timestamp):
+                out = convert([row(**{"Order Date": timestamp})])
+                self.assertEqual(out["summary"]["accepted"], 0)
+                self.assertEqual(out["summary"]["needsReview"], 1)
+                self.assertIsNone(out["orders"][0]["orderedOn"])
+                self.assertIn("invalid_order_date", out["orders"][0]["lines"][0]["reasonCodes"])
+
+    def test_valid_offsets_and_fractional_seconds(self):
+        for timestamp, expected in (("2026-09-01T23:30:00.123456-03:00", "2026-09-02"),
+                                    ("2026-09-01T00:30:00+09:00", "2026-09-01")):
+            out = convert([row(**{"Order Date": timestamp})])
+            self.assertEqual(out["summary"]["accepted"], 1)
+            self.assertEqual(out["orders"][0]["orderedOn"], expected)
+
+    def test_quantity_preserves_node_json_integer_precision(self):
+        out = convert([row(**{"Original Quantity": str(2**53 - 1)})])
+        self.assertEqual(out["orders"][0]["lines"][0]["quantity"], 2**53 - 1)
+        for quantity in (str(2**53), "9" * 5000):
+            out = convert([row(**{"Original Quantity": quantity})])
+            self.assertEqual(out["summary"]["needsReview"], 1)
+            self.assertIsNone(out["orders"][0]["lines"][0]["quantity"])
+            self.assertIn("invalid_quantity", out["orders"][0]["lines"][0]["reasonCodes"])
+
     def test_multiple_products(self):
         out = convert([row(), row(ASIN="FAKE-SKU-B")])
         self.assertEqual(out["summary"]["accepted"], 2)
