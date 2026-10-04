@@ -1,0 +1,109 @@
+# Personal Commerce API（#16 初期実装）
+
+既存Portalと別のNode.js API。Firebase ID tokenからuidを検証し、許可済みユーザーの購入履歴取得と粗い商品状態の記録だけを提供する。フレームワークやMCPは追加しない。
+
+## operation
+
+| HTTP | 認証 | 動作 |
+|---|---|---|
+| GET /health | 不要 | プロセス起動確認（外部サービスの正常性保証ではない） |
+| GET /me | 必須 | token由来uid |
+| GET /purchase-history | 必須 | get_purchase_history。productId/fromOn/toOn/limit/cursor |
+| POST /user-observations | 必須 | record_user_observationのkind=stateのみ |
+
+保護operationはFirebase Admin verifyIdToken(token,true)で署名/発行元/期限/失効・無効ユーザーを確認し、ALLOWED_UIDSで利用者を限定する。request bodyやqueryのuidは受け付けない。Originがある場合はPORTAL_ORIGINSの完全一致のみ許可（GitHub Pagesのoriginはパスを含まない）。CORSは認証の代わりではない。
+
+共通エラーは `{code,message,retryable,requestId}`。401はtoken不正、403はユーザー/Origin対象外、400は入力不正、409はmutation ID再利用、503は認証基盤障害。本文・token・氏名等をログへ出さない。
+
+履歴はユーザー配下の注文/明細/商品を読み、userOverridesを適用してから購入日降順・注文ID降順・明細ID降順で返す。個人規模のためcollectionごと最大5,000件までのbounded scan。過大入力は413で拒否し、結果を黙って切り捨てない。新規/訂正がページ間に起きる場合のsnapshot固定は未提供。
+
+状態記録は次の型に限定する:
+
+```json
+{
+  "clientMutationId": "unique-operation-id",
+  "productId": "product-a",
+  "kind": "state",
+  "value": "spare_available"
+}
+```
+
+valueはunknown/likely_available/running_low/spare_available/out_of_stock。observedAtは任意の過去または現在のRFC3339日時、noteは任意で500文字まで。DBパス・任意field・訂正・使用商品切替は受け付けない。
+
+Observation＋ProductState＋AuditLogを1 transactionで保存。同clientMutationId/同内容は元のresultを返し、異なる内容は409。productが同uidに存在しなければ404。履歴上の古い申告はログへ残すが新しい明示状態を上書きしない。stateRecordedAt、inputFingerprint、resultは最小実装の追加メタデータ。状態は7日後にも解除せず、likely_available/spare_availableの通知抑制期限のみ7日で保存する。
+
+**この段階では周期・候補の計算APIを提供しない。** 状態記録レスポンスもestimateを含めない。補充候補取得・再評価、usage/対象指定/release、購入訂正、Gmail取込は後続。既存のEstimateをこのAPIで更新せず、将来の候補operationは有効観測から再評価する必要がある。
+
+## ローカル検証（本番資格情報不要）
+
+Node.js 24、Java 21以上を用意する。
+
+```bash
+cd server
+npm ci
+npm test
+npm run test:emulator
+```
+
+Auth/Firestore Emulatorのみをdemo-portalで起動する。HTTP入力/認証の単体検証、Firebase SDKによるtoken検証、実Firestore transactionの同時再送、異uid参照、ルールによる直接アクセス拒否を検証する。Emulatorは本番署名検証/本番IAMを再現しない。単体試験のexpired/revoked/wrong-projectは検証器からのエラーを模擬する。本番SDKに認証を委譲し、認証を回避するfixtureモードは実装しない。
+
+手元でAPIを動かす場合、ターミナルA:
+
+```bash
+cd server
+npx firebase emulators:start --config ../firebase.json --project demo-portal --only auth,firestore
+```
+
+ターミナルB:
+
+```bash
+cd server
+export GOOGLE_CLOUD_PROJECT=demo-portal
+export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+export ALLOWED_UIDS=fixture-owner
+export PORTAL_ORIGINS=http://localhost:5173
+export PORT=8081
+node seed-emulator.mjs
+npm start
+```
+
+seed helperはlocalhost emulator＋demo-portal以外へ書き込めない。匿名fixtureを格納し、ローカルtokenをgitignore対象の.emulator-id-tokenへ保存する。テストログ/fixtureは実個人データを含まない。
+
+ターミナルC（serverディレクトリから）:
+
+```bash
+curl http://localhost:8081/health
+curl -H "Authorization: Bearer $(cat .emulator-id-token)" http://localhost:8081/purchase-history
+curl -X POST -H "Authorization: Bearer $(cat .emulator-id-token)" \
+  -H 'Content-Type: application/json' \
+  -d '{"clientMutationId":"sample-1","productId":"product-a","kind":"state","value":"spare_available"}' \
+  http://localhost:8081/user-observations
+```
+
+## 本番準備・デプロイ手順
+
+本PRはデプロイしない。既存Firebase projectはPortalのsrc/firebase.tsで確認できる。実行時にGOOGLE_CLOUD_PROJECT、本人Firebase uid、Portal originを設定する。uidはPortalのFirebase Auth登録ユーザーを確認しALLOWED_UIDSへ指定する。資格情報をAPIリクエストやGitHubへ保存しない。
+
+Cloud Run runtime Service AccountにはFirestoreのread/write（roles/datastore.user）と失効/無効ユーザー確認のFirebase Auth read（roles/firebaseauth.viewer）を付与し、owner/editorは使用しない。FirestoreサーバーSDKのIAMはdocument別のuid分離を提供しないため、Application側のユーザー配下固定とoperation制限が必要。共有projectの本/料理/wishlistにもSA権限が及ぶ点を理解して設定する。
+
+ADCはCloud RunのService Accountを利用する。ローカル本番接続ではgcloud auth application-default login等の適切なADCが必要だが、通常の検証はEmulatorを使う。Cloud Run上のエミュレーター環境変数は起動時に拒否する。
+
+```bash
+# repo root。project/uid/SAは実際の値に置換する。
+gcloud run deploy portal-commerce-api --source server --region asia-northeast1 \
+  --project FIREBASE_PROJECT_ID --service-account RUNTIME_SA_EMAIL \
+  --allow-unauthenticated --min-instances 0 --max-instances 1 \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=FIREBASE_PROJECT_ID,ALLOWED_UIDS=FIREBASE_UID,PORTAL_ORIGINS=https://motoki2601.github.io
+
+# ブラウザがcommerceを直接操作しないことを確認してrulesを反映。
+server/node_modules/.bin/firebase deploy --project FIREBASE_PROJECT_ID --only firestore:rules
+```
+
+Cloud Runの入口を公開するのはFirebase Bearer tokenをAPIで検証するため。/health以外は認証必須。Cloud Run IAMトークンとFirebase tokenを同じAuthorizationヘッダーへ同時指定しない。
+
+ルールは既存 `wishlist/data`、`recipes/data`、`books/data` の本人アクセスだけ許可し、commerceはread/writeともAPI経由。このallowlist外の既存機能がある場合は反映前に確認する。Portalの既存コードは上記3documentのみ使用していた。
+
+デプロイ後は実Firebase tokenで/me、購入履歴、状態記録を確認し、未認証401・別uid403を確認する。Firestore RulesはAPI/Portalの配置を更新するだけでは反映されないので上記deployを別途行う。
+
+公式: [ID token verification](https://firebase.google.com/docs/auth/admin/verify-id-tokens)、[Admin SDK setup](https://firebase.google.com/docs/admin/setup)、[Server Rules bypass](https://firebase.google.com/docs/firestore/security/get-started)。

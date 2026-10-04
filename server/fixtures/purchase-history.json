@@ -1,0 +1,14 @@
+{
+  "purchaseOrders": {
+    "order-a": { "schemaVersion": 1, "revision": 1, "merchant": "yodobashi", "merchantAccountKey": "fixture-store", "externalOrderId": "FIXTURE-A", "orderedOn": "2026-07-01", "dateTimezone": "Asia/Tokyo", "orderDateBasis": "body", "sourceId": "fixture-source", "identityStatus": "confirmed", "status": "ordered", "fieldOrigins": { "orderedOn": { "kind": "source", "sourceId": "fixture-source" } } }
+  },
+  "purchaseLines": {
+    "line-a": { "schemaVersion": 1, "revision": 1, "orderId": "order-a", "sourceId": "fixture-source", "sourceLineRef": "plain:order:0:item:0", "rawProductName": "架空クリーナー 詰替350ml", "productId": "product-a", "quantity": 2, "amountMinor": 900, "currency": "JPY", "status": "ordered", "matchMethod": "normalized", "fieldOrigins": { "rawProductName": { "kind": "source", "sourceId": "fixture-source" } } }
+  },
+  "products": {
+    "product-a": { "schemaVersion": 1, "revision": 1, "canonicalName": "架空クリーナー 詰替350ml", "aliases": [], "category": "cleaner", "brand": "架空ブランド", "sizeValue": 350, "sizeUnit": "ml", "packageType": "refill", "packCount": 1, "replenishmentStatus": "candidate", "decisionOrigin": "rule", "fieldOrigins": {} }
+  },
+  "sources": {
+    "fixture-source": { "schemaVersion": 1, "revision": 1, "provider": "gmail", "accountKey": "fixture-mailbox", "messageId": "fixture-message", "receivedAt": "2026-07-01T03:00:00Z", "messageKind": "order", "status": "imported", "orderIds": ["order-a"], "attemptCount": 1, "extractionVersion": "yodobashi-order-v1", "lastAttemptAt": "2026-07-01T03:00:00Z", "importedAt": "2026-07-01T03:00:00Z" }
+  }
+}

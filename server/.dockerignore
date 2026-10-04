@@ -1,0 +1,7 @@
+node_modules
+test
+fixtures
+.env
+*-debug.log
+.emulator-id-token
+seed-emulator.mjs
