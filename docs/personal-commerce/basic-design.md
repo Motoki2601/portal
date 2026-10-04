@@ -97,7 +97,7 @@ AI会話 / Tool       週次判定
 | userObservations/{observationId} | 追記専用ユーザー明示・訂正・解除、IDはclientMutationIdのhash |
 | auditLogs/{eventId} | 重要更新の追記専用監査。サーバー生成UUID |
 | replenishmentEstimates/{productId} | 最新の算出値・推定のみ、過去版は必要な監査差分で追跡 |
-| recommendations/{recommendationId} | その時点の推薦snapshot。SHA-256(["v1", "recommendation", clientMutationId]) |
+| recommendations/{recommendationId} | その時点の推薦snapshot。SHA-256(["recommendation", clientMutationId]) |
 | identityKeys/{keyHash} | 注文・商品識別子・ユーザー固定照合の一意性予約。実装用、業務エンティティを増やさない |
 
 参照は同じuid配下のdocument ID文字列。自動外部キー制約はないためApplicationが存在・所属を検証する。document IDをフィールドに重複保存しない。APIではidを付与する。sources/aliases/inputLineIds等の配列はMVP個人規模に限定し、肥大化した入力は分割を要求して黙って切り捨てない。
@@ -162,7 +162,7 @@ SOURCE–ORDERは複数メール/複数注文に対応。source.orderIdsでリ�
 6. **同時書込み**: identityKeyの不在確認・予約、対象document、source状態、auditを同じFirestore transactionで確定する。既存予約は同targetなら冪等、別targetならCONFLICT。check-then-writeを別操作にしない。AI呼出しはtransaction外。大き過ぎる入力はneeds_reviewとし、黙って部分登録しない。
 7. **ユーザー操作**: clientMutationIdで観測document IDを固定し、同内容再送は同結果、別内容で再利用はCONFLICT。推薦もclientMutationId由来のIDで同内容再送をno-opとし、異なる内容の再利用はCONFLICT。訂正はexpectedRevisionを必須とし競合時に再読込を要求する。監査作成とprojection更新は原子的に行う。
 
-すべての決定的ID/identityKey hashは上記の入力JSON配列の先頭に\"v1\"を追加し、UTF-8をSHA-256、hex小文字64桁とする。hashは匿名化を保証しないので実データ由来hashも公開fixtureへ入れない。
+すべての決定的ID/identityKey hashは上記の入力JSON配列の先頭に"v1"を追加し、UTF-8をSHA-256、hex小文字64桁とする。hashは匿名化を保証しないので実データ由来hashも公開fixtureへ入れない。
 
 ### 4.5 明示情報、訂正、監査
 
@@ -192,6 +192,8 @@ SOURCE–ORDERは複数メール/複数注文に対応。source.orderIdsでリ�
 - 算出中の変更は保存transactionで入力revision/fingerprintを再検証し、違えば再実行。候補取得でstale値を確定結果として返さない。購入履歴登録と推定計算は別transactionでよく、失敗時も週次/on-demandで回復する。
 
 ### 4.7 #13・#16へのI/O契約
+
+#13の実メール検証を反映した詳細契約は [gmail-import-contract.md](gmail-import-contract.md)。ヨドバシorder/dispatchを最初の対応経路とする。正常注文のorders[]に対し、dispatchはorders=[]＋relatedExternalOrderIds:string[]で既存注文へリンクする。購入日欠損や未対応cancel/returnはSourceのみneeds_reviewで保存し、PurchaseOrderを新規作成しない。reviewReason:stringはSourceの任意項目として追加する。
 
 全operationはuidを外部入力に含めない。読出しはeffective値とorigin、revisionを返す。TimestampはAPIでRFC3339、購入日はdate文字列。mutationはApplication経由のみ。
 
