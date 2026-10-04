@@ -1,10 +1,10 @@
 name: Commerce API checks
 on:
   pull_request:
-    paths: ['server/**', 'firestore.rules', 'firebase.json', '.github/workflows/commerce-api.yml']
+    paths: ['server/**', 'scripts/personal_commerce/**', 'firestore.rules', 'firebase.json', '.github/workflows/commerce-api.yml']
   push:
     branches: [main]
-    paths: ['server/**', 'firestore.rules', 'firebase.json', '.github/workflows/commerce-api.yml']
+    paths: ['server/**', 'scripts/personal_commerce/**', 'firestore.rules', 'firebase.json', '.github/workflows/commerce-api.yml']
 permissions:
   contents: read
 jobs:
@@ -21,6 +21,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: npm ci
         working-directory: server
       - run: npm test

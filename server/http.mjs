@@ -39,17 +39,18 @@ export function createApi({ application, verifyToken, allowedOrigins, allowedUid
         for (const name of new Set(url.searchParams.keys())) if (url.searchParams.getAll(name).length !== 1) throw invalid('Repeated query parameter');
         send(200, await application.getPurchaseHistory(uid, Object.fromEntries(url.searchParams))); return;
       }
-      if (req.method === 'POST' && url.pathname === '/user-observations') {
+      if (req.method === 'POST' && ['/user-observations', '/imports/amazon-csv'].includes(url.pathname)) {
         if (url.search) throw invalid('Query parameters are not accepted');
         if (req.headers['content-type']?.split(';')[0].trim() !== 'application/json') throw invalid('Content-Type must be application/json');
         const chunks = await new Promise((resolve, reject) => {
+          const maxBytes = url.pathname === '/imports/amazon-csv' ? 256 * 1024 : 8192;
           let size = 0; const parts = [];
-          req.on('data', chunk => { size += chunk.length; if (size <= 8192) parts.push(chunk); });
-          req.on('end', () => size > 8192 ? reject(new AppError('INVALID_ARGUMENT', 'Body too large', 413)) : resolve(parts));
+          req.on('data', chunk => { size += chunk.length; if (size <= maxBytes) parts.push(chunk); });
+          req.on('end', () => size > maxBytes ? reject(new AppError('INVALID_ARGUMENT', 'Body too large', 413)) : resolve(parts));
           req.on('error', reject);
         });
         let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw invalid('Invalid JSON'); }
-        send(200, await application.recordState(uid, body, requestId)); return;
+        send(200, url.pathname === '/imports/amazon-csv' ? await application.importAmazonCsv(uid, body, requestId) : await application.recordState(uid, body, requestId)); return;
       }
       throw new AppError('NOT_FOUND', 'Operation not found', 404);
     } catch (error) {

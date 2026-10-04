@@ -140,7 +140,7 @@ SOURCE–ORDERは複数メール/複数注文に対応。source.orderIdsでリ�
 | ReplenishmentEstimate | calculation:{basis:product/category/none, methodVersion:string, purchaseCount:int, intervalCount:int, inputLineIds:string[], inputFingerprint:string, calculatedAt:Timestamp}, prediction:{confidence:insufficient/low/medium, reasonCodes:string[]}, candidate:{eligible:boolean, reasonCodes:string[], evaluatedAt:Timestamp} | calculation.averageIntervalDays:number, calculation.medianIntervalDays:number, calculation.lastPurchasedOn:date, prediction.estimatedNextPurchaseOn:date, prediction.notifyFrom:date | category:string（basis=category時必須） |
 | Recommendation | productId:string, generatedAt:Timestamp, contextFingerprint:string, clientMutationId:string, rationale:string, recommendedProduct:{name:string}, alternatives:array | currentPrice:{amountMinor:int,currency:string,sourceUrl:string,observedAt:Timestamp} | estimateRevision:int, recommendedProduct.url:string, aiModel:string |
 | AuditLog | actor:user/importer/application/ai, action:create/import/merge/correct/observe/release/recalculate, target:{collection,id}, changes:array<{field,before,after}>, recordedAt:Timestamp, requestId:string | — | sourceId:string, observationId:string, reason:string, methodVersion:string |
-| IdentityKey | kind:order/product_identifier/user_match, target:{collection,id}, createdAt:Timestamp, schemaVersion:1 | — | constraints:map |
+| IdentityKey | kind:order/product_identifier/user_match/amazon_csv_attempt, target:{collection,id}, createdAt:Timestamp, schemaVersion:1 | — | constraints:map, inputHash:string / result:map（amazon_csv_attemptのみ） |
 
 補足:
 - PurchaseOrderの任意項目に `orderDateBasis:body/gmail_received_date` を追加。新規取込では必ず設定する。Amazon受信日採用時のfieldOrigins.orderedOnは `{kind:"rule",sourceId,methodVersion:"amazon-received-date-v1"}`。受信日を利用してもuser overrideを上書きしない。
@@ -154,6 +154,10 @@ SOURCE–ORDERは複数メール/複数注文に対応。source.orderIdsでリ�
 - sourcesのextractionVersionは使用する抽出契約の版で、まだ試行前は"unprocessed"。failed時も文面・個人情報をerrorCodeへ流さない。
 
 ### 4.4 重複防止・商品同一性
+
+CSVバックフィル保存の追加schema: Source.providerは`gmail | amazon_csv`、CSV SourceにはaccountKey/fileHashes/extractionVersion/orderIds/attemptCount/lastAttemptAt/importedAtを保存し、Gmail固有messageId/receivedAt/messageKindは適用しない。PurchaseOrder.orderDateBasisに`csv_order_date`を追加。明細のcsvDisposition/csvReasonCodes/csvOrderDateEvidenceはCSV取込の確認情報。`identityKeys`に`amazon_csv_attempt`（batch+orderの試行inputHash/result）を保存する。詳細と上限・Gmail統合規則は[server/README.md](../../server/README.md#amazon初期履歴の保存)を参照。周期計算は後続。
+
+保存CSV Sourceは`scope:"order"`、`inputSourceId`（Python提案のhistory単位ID）、`importBatchKey`、`sourceOrderKey`を必須追加。保存sourceIdはhash(["amazon_csv_order_source",accountKey,importBatchKey,sourceOrderKey])。全fileHashesは当該Source内で不変。status/importedAtは1注文の処理状態を表し、ファイル全体の完了とは解釈しない。amazon_csv_attemptのtargetは当該sources document。IdentityKeyの共通kind/target/createdAt/schemaVersionは例外なく付与する。
 
 1. **メール**: accountKey＋Gmail messageIdで一意。imported/duplicate済み同一メールは通常再取込をno-opとする。失敗再試行は同じsource documentを使用しattemptCountを増やす。抽出版変更で再処理する場合は明示的reprocessとして監査する。
 2. **注文**: merchant＋merchantAccountKey＋外部注文番号をidentityKeysに予約。別メールでも同一orderへ集約。注文番号はtrim等のmerchant別に定めた安全な正規化のみ（ハイフンを無条件に削除しない）。番号欠損はprovisionalとして保存できるが周期集計から除外しneeds_review。日付・金額・名称だけで別注文を自動統合しない。後で番号が判明したらcanonical orderへ統合し参照を付替え、暫定注文を計算対象外にし監査する。
