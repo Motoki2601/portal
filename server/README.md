@@ -11,6 +11,9 @@
 | GET /purchase-history | 必須 | get_purchase_history。productId/fromOn/toOn/limit/cursor |
 | POST /user-observations | 必須 | record_user_observationのkind=stateのみ |
 | POST /imports/amazon-csv | 必須 | 変換済みCSV提案を1注文ずつtransactionで保存 |
+| POST /purchase-history/match-products | 必須 | body={}。強い商品SKUでProductを照合 |
+| GET /replenishment-candidates | 必須 | 当日の補充候補だけを返す |
+| GET /replenishment-estimates | 必須 | 対象外理由を含む全商品の算出結果 |
 
 保護operationはFirebase Admin verifyIdToken(token,true)で署名/発行元/期限/失効・無効ユーザーを確認し、ALLOWED_UIDSで利用者を限定する。request bodyやqueryのuidは受け付けない。Originがある場合はPORTAL_ORIGINSの完全一致のみ許可（GitHub Pagesのoriginはパスを含まない）。CORSは認証の代わりではない。
 
@@ -33,7 +36,7 @@ valueはunknown/likely_available/running_low/spare_available/out_of_stock。obse
 
 Observation＋ProductState＋AuditLogを1 transactionで保存。同clientMutationId/同内容は元のresultを返し、異なる内容は409。productが同uidに存在しなければ404。履歴上の古い申告はログへ残すが新しい明示状態を上書きしない。stateRecordedAt、inputFingerprint、resultは最小実装の追加メタデータ。状態は7日後にも解除せず、likely_available/spare_availableの通知抑制期限のみ7日で保存する。
 
-**この段階では周期・候補の計算APIを提供しない。** 状態記録レスポンスもestimateを含めない。補充候補取得・再評価、usage/対象指定/release、購入訂正、Gmail取込は後続。既存のEstimateをこのAPIで更新せず、将来の候補operationは有効観測から再評価する必要がある。
+状態記録レスポンスはestimateを含めない。記録後は候補/算出結果GETで最新の状態を含めて算出できる。usage/対象指定/release、購入訂正、Gmail取込の書込みoperationは後続。estimateの保存projectionはまだ使用しない。
 
 ## ローカル検証（本番資格情報不要）
 
@@ -128,4 +131,14 @@ Source.status/importedAtはこの注文の処理状態であり、ZIP全体の�
 
 Gmail注文は、一意な同SKU＋同名称＋同数量＋同状態の既存明細へ対応できる場合だけ統合する。本文注文日との矛盾・状態/数量矛盾・SKUなし/同SKU複数行・購入日不明はSourceのみneeds_reviewとし、注文/明細は更新しない。受信日fallbackはCSVの実注文日で置換可能。CSV内の返品/未確定明細はunknown、取消はcancelled、無償交換はunknownで保存し、有効購入と数えない。
 
-初期保存はProductを作らず、照合済みproductIdだけ維持する。周期再計算と候補再評価は後続。確認待ちの解決UI、Gmail取得/parser、AI照合も含まない。本番書込みはデプロイ後に上のCLIを明示実行する。この実装検証では個人データを送信しない。
+CSV保存operation自体はProductを作らず、照合済みproductIdだけ維持する。次節の照合operationと候補算出を別途実行する。確認待ちの解決UI、Gmail取得/parser、AI照合は含まない。本番書込みはデプロイ後に上のCLIを明示実行する。この実装検証では個人データを送信しない。
+
+## 商品照合・補充候補の算出
+
+CSV保存後に`POST /purchase-history/match-products`へ空JSONを送る。商品名だけでは統合せず、scope付きmerchantSkuの完全一致で一意性を予約する。同SKUの競合Product・既存照合の矛盾はneedsReview件数へ。ユーザーのproductId overrideはnullも保持する。同SKU100明細を超える場合も自動照合を保留する。処理はSKUごとのtransactionで、途中中断時は再実行可能。
+
+未照合SKUはProductを作成し、category/brand/容量/包装は推測せずunknown/null。confirmed＋orderedの異なる購入日が2日以上あるとcandidateへ分類する。これは再購入品の確認候補であり、消耗品/実在庫/現用の確定ではない。ユーザー指定のexcluded等は自動変更しない。追加取込後にも照合operationを再実行する。
+
+候補/算出結果GETは4collection（注文・明細・商品・状態、各最大5,000件）を読み取りtransactionの同一snapshotで取得し、毎回最新のeffective値を計算する。結果はオンデマンドで返し、replenishmentEstimates collectionへキャッシュ保存しない。state申告・取消・訂正後も古い保存値を返さず再算出する。定期実行、推定projection保存、AI分類/名称/カテゴリ推定、カテゴリ指定/usage/releaseの書込みUIは後続。
+
+同日の購入を1機会へ集約し、平均・中央値、中央値を四捨五入した次回日、7日前の通知開始日を返す。数量で周期を割らない。商品履歴不足は既知カテゴリだけ補助し、カテゴリ不明は推定不可。excluded/not_current・7日抑制を優先し、過去の残あり状態は消さない。同カテゴリの別商品を後から購入している場合は、明示currentがない古い商品を候補から除く。明示out_of_stockの周期不足例外はcurrent指定された対象商品だけ。候補は在庫切れの断定ではない。

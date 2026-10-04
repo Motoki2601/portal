@@ -196,6 +196,8 @@ CSVバックフィル保存の追加schema: Source.providerは`gmail | amazon_cs
 - 週次は取込後に再計算・当日candidate評価。on-demand参照時にfingerprint不一致なら再計算。inputFingerprintは対象明細のeffective値・revision、商品category・methodVersionから作る。新規行追加も検知するため対象集合全体を含める。
 - 算出中の変更は保存transactionで入力revision/fingerprintを再検証し、違えば再実行。候補取得でstale値を確定結果として返さない。購入履歴登録と推定計算は別transactionでよく、失敗時も週次/on-demandで回復する。
 
+初期実装はキャッシュprojectionを保存せず、候補/算出結果GET時に4collectionの読み取りtransactionから毎回算出する。ReplenishmentEstimateはこの段階ではレスポンス型で、保存collectionは後続最適化。SKU照合は独立した明示operation。SKUの完全一致のみ実装し、AI/名称照合・カテゴリ自動分類・週次実行は後続。§4.6の算術・訂正優先・通知抑制を適用する。
+
 ### 4.7 #13・#16へのI/O契約
 
 #13の実メール検証を反映した詳細契約は [gmail-import-contract.md](gmail-import-contract.md)。ヨドバシorder/dispatchを最初の対応経路とする。正常注文のorders[]に対し、dispatchはorders=[]＋relatedExternalOrderIds:string[]で既存注文へリンクする。購入日欠損や未対応cancel/returnはSourceのみneeds_reviewで保存し、PurchaseOrderを新規作成しない。reviewReason:stringはSourceの任意項目として追加する。
