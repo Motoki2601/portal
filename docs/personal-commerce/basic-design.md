@@ -103,7 +103,7 @@ AI会話 / Tool       週次判定
 参照は同じuid配下のdocument ID文字列。自動外部キー制約はないためApplicationが存在・所属を検証する。document IDをフィールドに重複保存しない。APIではidを付与する。sources/aliases/inputLineIds等の配列はMVP個人規模に限定し、肥大化した入力は分割を要求して黙って切り捨てない。
 
 - `R`: 必須・非null、`N`: キー必須だが不明ならnull、`O`: 任意で未取得時は省略。[]は既知の空、nullは不明。
-- 保存日時はFirestore Timestamp（UTC）。購入日は時刻不明が多いため `orderedOn`: YYYY-MM-DD、`dateTimezone`: IANA zone（MVPはAsia/Tokyo）。メール受信日時を購入日時の代用にしない。
+- 保存日時はFirestore Timestamp（UTC）。購入日は時刻不明が多いため `orderedOn`: YYYY-MM-DD、`dateTimezone`: IANA zone（MVPはAsia/Tokyo）。本文注文日を優先する。例外としてAmazonの物品「注文済み」メールは、本文注文日がない場合にGmail internalDateのAsia/Tokyo日付を購入日として採用する（ユーザー指定の業務ルール、2026-10-05）。
 - 可変document共通R: `schemaVersion:1, revision:int>=1, createdAt:Timestamp, updatedAt:Timestamp`。追記専用document共通R: `schemaVersion:1, createdAt:Timestamp`。
 - 金額は最小通貨単位の非負整数＋ISO通貨コード。JPYは円。数量は正のnumberまたはnull。数量不明を1に補完しない。
 - 長文・原メール本文・住所・カード情報・OAuth tokenは保存しない。Gmail IDと抽出済み項目で再参照できる。secretは別管理。全enumは許可値のみ。
@@ -143,6 +143,7 @@ SOURCE–ORDERは複数メール/複数注文に対応。source.orderIdsでリ�
 | IdentityKey | kind:order/product_identifier/user_match, target:{collection,id}, createdAt:Timestamp, schemaVersion:1 | — | constraints:map |
 
 補足:
+- PurchaseOrderの任意項目に `orderDateBasis:body/gmail_received_date` を追加。新規取込では必ず設定する。Amazon受信日採用時のfieldOrigins.orderedOnは `{kind:"rule",sourceId,methodVersion:"amazon-received-date-v1"}`。受信日を利用してもuser overrideを上書きしない。
 - fieldOriginsは取得・分類したフィールドごとに `{kind:source/user/ai/rule, sourceId?, observationId?, methodVersion?}`。source由来はsourceId必須、user由来はobservationId必須。AI抽出の購入日・名称はsource根拠の事実であり、AIの在庫推定とは異なる。
 - userOverridesは `{field:{value,observationId}}`。取込事実の現在値とは分離し、読出し時にoverlayする。nullへの訂正も有効な指定。注文・明細・商品へのAI/取込更新はoverrideを削除しない。
 - quantity/amountMinor/currencyはnull許容。amountMinor非nullならcurrency必須。amountMinorは明細合計でunit priceとは異なる。注文合計と明細合計の一致は送料・割引で保証しない。
