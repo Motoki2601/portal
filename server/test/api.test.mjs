@@ -39,6 +39,10 @@ test('HTTP authentication, origin, validation and uid boundary', async t => {
   assert.equal((await post({ ...body, uid: 'other' })).status, 400);
   assert.equal((await post({ ...body, kind: 'correction' })).status, 400);
   assert.equal((await post({ ...body, observedAt: '2026-02-30T00:00:00Z' })).status, 400);
+  for (const observedAt of ['2026-09-01T24:00:00Z', '2026-09-01T12:60:00Z', '2026-09-01T12:00:60Z', '2026-09-01T12:00:00+24:00', '2026-09-01T12:00:00+01:60']) {
+    assert.equal((await post({ ...body, observedAt })).status, 400);
+  }
+  assert.equal((await post({ ...body, observedAt: '2026-09-01T23:59:59.999+09:00' })).status, 200);
   assert.equal((await post({ ...body, note: 'x'.repeat(10000) })).status, 413);
   assert.equal((await post(body)).status, 200);
   assert(calls.every(uid => uid === 'owner'));

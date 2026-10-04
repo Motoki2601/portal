@@ -47,6 +47,11 @@ test('Firebase Auth, tenant isolation, rules and transactional state/audit', asy
   assert.deepEqual(results[0], results[1]);
   assert.equal((await root.collection('userObservations').get()).size, 1);
   assert.equal((await root.collection('auditLogs').get()).size, 1);
+  const initialAudit = (await root.collection('auditLogs').get()).docs[0].data();
+  assert(initialAudit.changes.every(change => change.before === null));
+  for (const field of ['observedAt', 'stateRecordedAt', 'revision', 'state', 'origin', 'suppressUntil']) {
+    assert(initialAudit.changes.some(change => change.field === field));
+  }
   assert.equal(results[0].effectiveState.suppressUntil, '2026-10-12T00:00:00.000Z');
   await assert.rejects(application.recordState('owner', { ...body, value: 'out_of_stock' }, 'request-c'), e => e.code === 'CONFLICT');
   await application.recordState('owner', { ...body, clientMutationId: 'old-observation', value: 'out_of_stock', observedAt: '2026-09-01T00:00:00Z' }, 'request-d');

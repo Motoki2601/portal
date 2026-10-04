@@ -80,6 +80,9 @@ export function createApplication(repository, now = () => new Date()) {
       if (body.observedAt !== undefined) {
         if (typeof body.observedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(body.observedAt)) throw invalid('Invalid observedAt');
         date(body.observedAt.slice(0, 10));
+        const [hour, minute, second] = body.observedAt.slice(11, 19).split(':').map(Number);
+        const offset = body.observedAt.match(/[+-](\d{2}):(\d{2})$/);
+        if (hour > 23 || minute > 59 || second > 59 || (offset && (Number(offset[1]) > 23 || Number(offset[2]) > 59))) throw invalid('Invalid observedAt');
         observedAt = new Date(body.observedAt);
         if (!Number.isFinite(observedAt.getTime()) || observedAt > clock) throw invalid('observedAt must not be in the future');
       }

@@ -53,7 +53,12 @@ export function createFirestoreRepository(db) {
         if (input.note !== null) observationData.note = input.note;
         tx.create(observation, observationData);
         if (apply) tx.set(state, next);
-        tx.create(audit, { schemaVersion: 1, createdAt: recordedAt, recordedAt, actor: 'user', action: 'observe', target: { collection: 'productStates', id: input.productId }, observationId: input.observationId, requestId: input.requestId, changes: apply ? [{ field: 'state', before: old.state, after: input.value }, { field: 'origin', before: old.origin, after: 'user' }, { field: 'observationId', before: old.observationId, after: input.observationId }, { field: 'suppressUntil', before: serialize(old.suppressUntil), after: serialize(next.suppressUntil) }] : [], reason: apply ? 'user_explicit_state' : 'historical_observation_only' });
+        const changes = apply ? Object.keys(next).flatMap(field => {
+          const before = stateSnap.exists ? serialize(old[field] ?? null) : null;
+          const after = serialize(next[field]);
+          return JSON.stringify(before) === JSON.stringify(after) ? [] : [{ field, before, after }];
+        }) : [];
+        tx.create(audit, { schemaVersion: 1, createdAt: recordedAt, recordedAt, actor: 'user', action: 'observe', target: { collection: 'productStates', id: input.productId }, observationId: input.observationId, requestId: input.requestId, changes, reason: apply ? 'user_explicit_state' : 'historical_observation_only' });
         // Candidate computation belongs to the later replenishment operation, not this initial API.
         return result;
       });
