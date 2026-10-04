@@ -65,6 +65,17 @@ test('CSV transactions: concurrent retry, overrides, Gmail matching and review',
   assert.equal(held.status, 'needs_review'); assert.equal(held.orderId, null);
   assert.equal((await ambiguousRoot.collection('purchaseLines').get()).size, 1);
   assert.equal((await ambiguousRoot.collection('auditLogs').get()).size, 1); // Source only.
+  const returned = csvFixture('returned');
+  returned.order.status = 'unknown';
+  const returnedLine = returned.order.lines[0];
+  Object.assign(returnedLine, { status: 'unknown', disposition: 'needs_review', reasonCodes: ['return_or_refund_requires_review'], cycleEligibleAfterProductMatch: false });
+  const returnResult = await importCsv(uid + '-return', returned, 'return');
+  assert.equal(returnResult.status, 'needs_review');
+  assert.equal((await db.doc(`users/${uid}-return/purchaseLines/${returnResult.lineIds[0]}`).get()).data().status, 'unknown');
+  const qtyConflict = csvFixture('quantity-conflict');
+  qtyConflict.order.lines[0].quantity = 2;
+  assert.equal((await importCsv(gmailUid, qtyConflict, 'quantity')).status, 'needs_review');
+  assert.equal((await gmailRoot.collection('purchaseLines').doc('gmail-line').get()).data().quantity, 1);
   await assert.rejects(importCsv('../other', proposal, 'bad-uid'), e => e.code === 'FORBIDDEN');
   assert.equal((await root.collection('purchaseOrders').get()).size, 1);
 });

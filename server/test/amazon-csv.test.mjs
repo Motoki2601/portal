@@ -17,6 +17,7 @@ test('Python CSV proposals match Node identities and reject unsafe fields', () =
     f => { f.order.lines[0].reasonCodes = ['untrusted']; },
     f => { f.order.lines[0].fieldOrigins.quantity.kind = 'user'; },
     f => { f.order.lines[0].orderedOn = '2026-08-01'; },
+    f => { f.order.lines[0].orderDateEvidence = '2026-09-01T24:00:00Z'; },
     f => { f.order.lines.push(structuredClone(f.order.lines[0])); },
   ]) {
     const changed = structuredClone(fixture); mutate(changed);

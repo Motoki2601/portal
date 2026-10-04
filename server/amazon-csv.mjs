@@ -116,6 +116,7 @@ export function createCsvImporter(db, now = () => new Date()) {
       if (existing.length > 100) review.push('too_many_existing_lines');
       if (oldOrder && (oldOrder.merchant !== 'amazon' || oldOrder.merchantAccountKey !== s.accountKey || oldOrder.externalOrderId !== o.externalOrderId)) throw new AppError('CONFLICT', 'Order identity conflict', 409);
       if (!o.orderedOn) review.push('unknown_order_date');
+      if (o.lines.some(l => !l.rawProductName)) review.push('missing_product_name');
       const sameCsv = oldOrder?.orderDateBasis === 'csv_order_date';
       if (oldOrder && oldOrder.orderedOn !== o.orderedOn && oldOrder.orderDateBasis !== 'gmail_received_date') review.push('order_date_conflict');
       if (oldOrder && !sameCsv && oldOrder.status !== o.status) review.push('order_status_conflict');
