@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "description": "All identifiers, dates, prices and products are synthetic; not actual user mail.",
+  "cases": [
+    {
+      "id": "A",
+      "input": {
+        "provider": "gmail",
+        "accountKey": "fixture-mailbox",
+        "extractionVersion": "yodobashi-order-v1",
+        "merchant": "yodobashi",
+        "merchantAccountKey": "fixture-merchant",
+        "messageId": "fixture-order-A",
+        "receivedAt": "2026-07-01T03:00:00Z",
+        "messageKind": "order",
+        "decodedOrderSection": "【ご注文番号】 FIXTURE-ORDER-A\n・ご注文日 2026年07月01日\n【ご注文商品】\n・「架空クリーナー つめかえ用 350ml」\n 合計 2 点 900 円\n・配達料金：0 円"
+      },
+      "expected": {
+        "status": "imported",
+        "orders": [
+          {
+            "sourceOrderRef": "plain:order:0",
+            "merchant": "yodobashi",
+            "merchantAccountKey": "fixture-merchant",
+            "externalOrderId": "FIXTURE-ORDER-A",
+            "orderedOn": "2026-07-01",
+            "dateTimezone": "Asia/Tokyo",
+            "lines": [
+              {
+                "sourceLineRef": "plain:order:0:item:0",
+                "rawProductName": "架空クリーナー つめかえ用 350ml",
+                "quantity": 2,
+                "amountMinor": 900,
+                "currency": "JPY"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "B",
+      "input": {
+        "provider": "gmail",
+        "accountKey": "fixture-mailbox",
+        "extractionVersion": "yodobashi-order-v1",
+        "merchant": "yodobashi",
+        "merchantAccountKey": "fixture-merchant",
+        "messageId": "fixture-dispatch-A",
+        "receivedAt": "2026-07-02T03:00:00Z",
+        "messageKind": "dispatch",
+        "decodedOrderSection": "【ご注文番号】 FIXTURE-ORDER-A\n・ご注文日 2026年07月01日\n【今回出荷の商品】\n・「架空クリーナー つめかえ用 350ml」\n 2 点 900 円"
+      },
+      "expected": {
+        "status": "imported",
+        "orders": [],
+        "relatedExternalOrderIds": [
+          "FIXTURE-ORDER-A"
+        ],
+        "additionalOrderCount": 0,
+        "additionalLineCount": 0
+      }
+    },
+    {
+      "id": "C",
+      "input": {
+        "provider": "gmail",
+        "accountKey": "fixture-mailbox",
+        "extractionVersion": "yodobashi-order-v1",
+        "merchant": "yodobashi",
+        "merchantAccountKey": "fixture-merchant",
+        "messageId": "fixture-order-C",
+        "receivedAt": "2026-07-03T03:00:00Z",
+        "messageKind": "order",
+        "decodedOrderSection": "【ご注文番号】 FIXTURE-ORDER-C\n・ご注文日 2026年07月03日\n【ご注文商品】\n・「架空ティシュー 200組\n 5箱パック」\n 合計 1 点 500 円\n・「架空石けん 詰替 400ml」\n 合計 2 点 800 円\n・配達料金：0 円"
+      },
+      "expected": {
+        "status": "imported",
+        "lineCount": 2,
+        "quantities": [
+          1,
+          2
+        ],
+        "amountsMinor": [
+          500,
+          800
+        ],
+        "normalizedNames": [
+          "架空ティシュー 200組 5箱パック",
+          "架空石けん 詰替 400ml"
+        ]
+      }
+    },
+    {
+      "id": "D",
+      "input": {
+        "provider": "gmail",
+        "accountKey": "fixture-mailbox",
+        "extractionVersion": "yodobashi-order-v1",
+        "merchant": "yodobashi",
+        "merchantAccountKey": "fixture-merchant",
+        "messageId": "fixture-missing-date",
+        "receivedAt": "2026-07-04T03:00:00Z",
+        "messageKind": "order",
+        "decodedOrderSection": "【ご注文番号】 FIXTURE-ORDER-D\n【ご注文商品】\n・「架空商品」\n 合計 1 点 500 円"
+      },
+      "expected": {
+        "status": "needs_review",
+        "reviewReason": "MISSING_ORDER_DATE",
+        "orders": [],
+        "orderedOn": null
+      }
+    },
+    {
+      "id": "E",
+      "input": {
+        "provider": "gmail",
+        "accountKey": "fixture-mailbox",
+        "extractionVersion": "yodobashi-order-v1",
+        "merchant": "yodobashi",
+        "merchantAccountKey": "fixture-merchant",
+        "messageId": "fixture-missing-quantity",
+        "receivedAt": "2026-07-05T03:00:00Z",
+        "messageKind": "order",
+        "decodedOrderSection": "【ご注文番号】 FIXTURE-ORDER-E\n・ご注文日 2026年07月05日\n【ご注文商品】\n・「架空石けん 詰替 400ml」\n・配達料金：0 円"
+      },
+      "expected": {
+        "status": "imported",
+        "lineCount": 1,
+        "quantity": null,
+        "amountMinor": null,
+        "currency": null
+      }
+    }
+  ]
+}
