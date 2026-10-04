@@ -155,6 +155,8 @@ SOURCE–ORDERは複数メール/複数注文に対応。source.orderIdsでリ�
 
 ### 4.4 重複防止・商品同一性
 
+CSVバックフィル保存の追加schema: Source.providerは`gmail | amazon_csv`、CSV SourceにはaccountKey/fileHashes/extractionVersion/orderIds/attemptCount/lastAttemptAt/importedAtを保存し、Gmail固有messageId/receivedAt/messageKindは適用しない。PurchaseOrder.orderDateBasisに`csv_order_date`を追加。明細のcsvDisposition/csvReasonCodes/csvOrderDateEvidenceはCSV取込の確認情報。`identityKeys`に`amazon_csv_attempt`（batch+orderの試行inputHash/result）を保存する。詳細と上限・Gmail統合規則は[server/README.md](../../server/README.md#amazon初期履歴の保存)を参照。周期計算は後続。
+
 1. **メール**: accountKey＋Gmail messageIdで一意。imported/duplicate済み同一メールは通常再取込をno-opとする。失敗再試行は同じsource documentを使用しattemptCountを増やす。抽出版変更で再処理する場合は明示的reprocessとして監査する。
 2. **注文**: merchant＋merchantAccountKey＋外部注文番号をidentityKeysに予約。別メールでも同一orderへ集約。注文番号はtrim等のmerchant別に定めた安全な正規化のみ（ハイフンを無条件に削除しない）。番号欠損はprovisionalとして保存できるが周期集計から除外しneeds_review。日付・金額・名称だけで別注文を自動統合しない。後で番号が判明したらcanonical orderへ統合し参照を付替え、暫定注文を計算対象外にし監査する。
 3. **明細**: 同じsource＋sourceLineRefの再処理は同じlineを更新。外部line IDがない場合、同注文内のidentifier＋容量＋包装が一致し一意な既存明細だけを照合。曖昧な重複行はneeds_review、追加計上しない。別メールのdispatchは既存注文を裏付けるだけで新規購入明細を作らない。メール掲載のない明細を削除しない。

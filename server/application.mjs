@@ -33,6 +33,9 @@ function compare(a, b) {
 
 export function createApplication(repository, now = () => new Date()) {
   return {
+    async importAmazonCsv(uid, body, requestId) {
+      return repository.importAmazonCsv(uid, body, requestId);
+    },
     async getPurchaseHistory(uid, params = {}) {
       const allowed = ['productId', 'fromOn', 'toOn', 'limit', 'cursor'];
       if (Object.keys(params).some(k => !allowed.includes(k))) throw invalid('Unknown query parameter');

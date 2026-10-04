@@ -21,6 +21,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: npm ci
         working-directory: server
       - run: npm test

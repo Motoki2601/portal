@@ -1,7 +1,7 @@
 # Amazon購入履歴CSV変換契約 v1
 
 関連: #23 / #13 / #16 / #22。既存の基本設計・Gmail取込契約を補完する。
-この変更は初期バックフィルの**オフライン変換とdry-run**。Firestore保存、商品照合、Gmailとの実マージ、購入周期再計算は後続。
+初期バックフィルのオフライン変換とdry-runに加え、認証付きの保存処理は `POST /imports/amazon-csv` で提供する。注文単位でidentity予約・監査・訂正維持をtransaction化する。実行方法は[server/README.md](../../server/README.md#amazon初期履歴の保存)。商品照合・購入周期再計算は後続。
 
 ## 実行
 
@@ -42,7 +42,7 @@ account-keyは後続Gmail取込と共通のmerchantAccountKey（内部UUID）を
 | 価格項目 | amountMinor=null | 単価/小計等の意味が未検証のため全件未確定 |
 
 価格をnullにしても購入日ベースの周期計算に使える。数量で周期を割らない。
-`orderDateBasis=csv_order_date` をCSV契約の追加enumとして提案する。基本設計のbody/gmail_received_dateおよびsource.provider=gmailへそのまま保存しない。保存前に#16でCSV sourceへのschema拡張を適用する。
+`orderDateBasis=csv_order_date` と `source.provider=amazon_csv` は基本設計に追加。Gmail固有項目はCSV sourceへ保存しない。
 
 ## 状態・購入周期入力
 

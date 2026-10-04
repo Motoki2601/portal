@@ -1,0 +1,70 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { initializeApp, deleteApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { createCsvImporter } from '../amazon-csv.mjs';
+import { csvFixture } from './csv-fixture.mjs';
+
+test('CSV transactions: concurrent retry, overrides, Gmail matching and review', async t => {
+  assert(process.env.FIRESTORE_EMULATOR_HOST);
+  const app = initializeApp({ projectId: 'demo-portal' }, 'csv-integration');
+  const db = getFirestore(app); t.after(() => deleteApp(app));
+  const importCsv = createCsvImporter(db, () => new Date('2026-10-05T00:00:00Z'));
+  const uid = 'csv-' + Date.now(); const root = db.collection('users').doc(uid);
+  const proposal = csvFixture('initial', 2);
+  const [a, b] = await Promise.all([importCsv(uid, proposal, 'a'), importCsv(uid, proposal, 'b')]);
+  assert.deepEqual(a, b); assert.equal(a.status, 'imported');
+  assert.equal((await root.collection('purchaseOrders').get()).size, 1);
+  assert.equal((await root.collection('purchaseLines').get()).size, 2);
+  assert.equal((await root.collection('auditLogs').get()).size, 4);
+  const reordered = Object.fromEntries(Object.entries(proposal).reverse());
+  assert.deepEqual(await importCsv(uid, reordered, 'c'), a);
+  const changedAttempt = structuredClone(proposal); changedAttempt.order.lines[0].rawProductName = '別の架空商品';
+  await assert.rejects(importCsv(uid, changedAttempt, 'conflict'), e => e.code === 'CONFLICT');
+
+  const order = root.collection('purchaseOrders').doc(a.orderId);
+  const line = root.collection('purchaseLines').doc(a.lineIds[0]);
+  const overrides = { orderedOn: { value: '2026-09-03', observationId: 'user-date' } };
+  await order.update({ userOverrides: overrides });
+  await line.update({ productId: 'matched-product', matchMethod: 'user', amountMinor: 900, userOverrides: { quantity: { value: 3, observationId: 'user-quantity' } } });
+  const updated = csvFixture('new-export', 2);
+  const outcome = await importCsv(uid, updated, 'update');
+  assert.deepEqual(outcome.lineIds, a.lineIds);
+  assert.deepEqual((await order.get()).data().userOverrides, overrides);
+  const data = (await line.get()).data();
+  assert.equal(data.userOverrides.quantity.value, 3); assert.equal(data.productId, 'matched-product');
+  assert.equal(data.matchMethod, 'user'); assert.equal(data.amountMinor, 900);
+  assert.equal((await root.collection('purchaseLines').get()).size, 2);
+  const cancelled = csvFixture('cancelled', 2);
+  cancelled.order.lines[0].status = 'cancelled'; cancelled.order.lines[0].disposition = 'excluded';
+  cancelled.order.lines[0].reasonCodes = ['cancelled']; cancelled.order.lines[0].cycleEligibleAfterProductMatch = false;
+  await importCsv(uid, cancelled, 'cancel');
+  assert.equal((await line.get()).data().status, 'cancelled');
+  const stale = await importCsv(uid, csvFixture('previously-unseen-old-export', 2), 'stale');
+  assert.equal(stale.status, 'needs_review');
+  assert.equal((await line.get()).data().status, 'cancelled');
+  const audits = (await root.collection('auditLogs').get()).docs.map(d => d.data());
+  assert(audits.some(d => d.changes.some(c => c.field === 'status' && c.before === 'ordered' && c.after === 'cancelled')));
+  assert.deepEqual(await importCsv(uid, proposal, 'old-replay'), a);
+  assert.equal((await line.get()).data().status, 'cancelled');
+
+  const gmailUid = uid + '-gmail'; const gmailRoot = db.collection('users').doc(gmailUid);
+  const gmail = csvFixture('gmail');
+  const gmailOrder = gmailRoot.collection('purchaseOrders').doc(gmail.order.orderKey);
+  await gmailOrder.set({ merchant: 'amazon', merchantAccountKey: gmail.source.accountKey, externalOrderId: gmail.order.externalOrderId, orderedOn: '2026-09-03', orderDateBasis: 'gmail_received_date', status: 'ordered', revision: 1 });
+  await gmailRoot.collection('purchaseLines').doc('gmail-line').set({ orderId: gmailOrder.id, identifiers: gmail.order.lines[0].identifiers, rawProductName: gmail.order.lines[0].rawProductName, quantity: 1, status: 'ordered', amountMinor: 750, currency: 'JPY', productId: 'gmail-product', revision: 1 });
+  const merged = await importCsv(gmailUid, gmail, 'gmail');
+  assert.equal(merged.status, 'imported'); assert.deepEqual(merged.lineIds, ['gmail-line']);
+  assert.equal((await gmailOrder.get()).data().orderedOn, '2026-09-02');
+  assert.equal((await gmailRoot.collection('purchaseLines').get()).size, 1);
+
+  const ambiguousUid = uid + '-ambiguous'; const ambiguousRoot = db.collection('users').doc(ambiguousUid);
+  await ambiguousRoot.collection('purchaseOrders').doc(gmailOrder.id).set({ ...(await gmailOrder.get()).data(), orderDateBasis: 'body' });
+  await ambiguousRoot.collection('purchaseLines').doc('unknown-line').set({ orderId: gmailOrder.id, rawProductName: gmail.order.lines[0].rawProductName, status: 'ordered', quantity: 1 });
+  const held = await importCsv(ambiguousUid, gmail, 'held');
+  assert.equal(held.status, 'needs_review'); assert.equal(held.orderId, null);
+  assert.equal((await ambiguousRoot.collection('purchaseLines').get()).size, 1);
+  assert.equal((await ambiguousRoot.collection('auditLogs').get()).size, 1); // Source only.
+  await assert.rejects(importCsv('../other', proposal, 'bad-uid'), e => e.code === 'FORBIDDEN');
+  assert.equal((await root.collection('purchaseOrders').get()).size, 1);
+});
