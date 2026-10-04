@@ -1,211 +1,255 @@
 # ADR: 生活データ基盤の構成方針
 
 関連: #9 / #11 / #12 / #13 / PR #14
-状態: Proposed（Amazon固有項目と料金最終確認後にAcceptedへ更新）
+状態: Proposed（実環境のSecurity Rules確認後にAcceptedへ更新）
 
 ## 1. 結論
-既存PortalのFirebase Auth / Firestoreは維持し、生活データ基盤はGoogle Cloud上に段階追加する。
-
-採用候補構成:
+既存PortalのFirebase Auth / Firestoreを維持し、生活データ基盤も**Firestoreをoperational write model（正本）**として利用する。
+PDF/CSV原本はCloud Storage、API/取込処理はCloud Run、分析・突合検証・消費周期計算はBigQueryへ分離する。
 
 ```text
 Portal (GitHub Pages)
-  ├─ 既存機能 → Firebase Auth / Firestore
-  └─ 生活データ機能
-       ↓ Firebase ID token
-     Backend API (Cloud Run第一候補)
-       ├─ Cloud Storage: raw原本
-       ├─ BigQuery: parsed / curated / reconciliation / analytics
-       └─ 必要に応じてジョブ実行
+  ↓ Firebase ID token
+Cloud Run API
+  ├─ Firestore: operational source of truth
+  │    products / variants / purchases / transactions / links / inventory_events
+  │
+  ├─ Cloud Storage: private raw PDF/CSV
+  │
+  └─ BigQuery: analytics / reconciliation analysis / derived metrics
+       （必要データをFirestore/parsed結果から連携）
 ```
 
-既存Firestoreデータは移行しない。
+既存Wishlist / Recipes / Booksのデータ構造は移行しない。
 PortalからCloud Storage / BigQueryへ直接アクセスさせない。
 
 ## 2. 判断理由
 
-### 既存Firebaseを残す理由
-- Googleログインと既存3機能がすでに動作している。
-- Wishlist/Recipes/Booksは`users/{uid}/...`配下の単純なデータ構造で、現状のFirestore方式で要件を満たしている。
-- 全面移行は認証・既存データ移行・回帰試験を増やすが、MVPの価値には直結しない。
+### Firebase Authを残す
+- Googleログインが既に動作している。
+- 認証移行をMVPのクリティカルパスにしない。
+- Cloud RunではFirebase ID tokenを検証し、uidをサーバー側で確定する。
 
-### 生活データを別レイヤーにする理由
-生活データ側では次が必要になる。
-- PDF/CSV原本の保管
-- raw / parsed / curatedの再処理
-- purchase / financial transactionの多対多突合
-- append中心の在庫イベント履歴
-- 冪等性
-- 訂正後の再計算
-- 分析・購入周期計算
+### Firestoreをwrite modelにする
+在庫イベントでは以下をアプリケーション側で確実に扱う必要がある。
+- 単一イベントの登録
+- `user_id + idempotency_key`の重複防止
+- 訂正/取消
+- 状態遷移競合
+- ユーザー単位のアクセス制御
+- Portalからの低レイテンシ参照
 
-既存の「1ドキュメントへ配列全体を書き戻す」方式をそのまま拡張するより、API境界と分析用ストアを分ける方が変更影響を限定できる。
+既存プロジェクトですでにFirestoreを利用しており、個人MVPの書込量では新たなRDBを増やす便益が小さい。
 
-## 3. コンポーネント
+BigQueryは主キー/外部キー制約を強制しない。また単行DMLを中心とするOLTP用途より分析用途を主眼とするため、inventory_eventの正本にはしない。
 
-### Firebase Auth
-継続利用する。
-Portalで取得したFirebase ID tokenをBackend APIへ送信し、API側で検証する。
-API内の`user_id`は検証済みtokenのuidから決定し、クライアント指定値を信用しない。
+### BigQueryを残す
+以下はBigQueryが得意な領域として分離する。
+- 過去3〜6か月の購買分析
+- purchaseとfinancial transactionの候補突合
+- 消費期間/購入間隔の集計
+- 将来の補充候補分析
+- raw/parsed/curatedデータの横断確認
 
-### Firestore
-既存Wishlist / Recipes / Booksで継続利用する。
-生活データ基盤の正本としては原則利用しない。
-MVPで低レイテンシな小規模UI状態が必要になった場合だけ補助用途を再評価する。
+MVP初期から全処理をBigQueryへ寄せず、分析が必要なテーブルだけ連携する。
 
-### Cloud Storage
-非公開raw原本を保持する。
+## 3. データ責務
 
-推奨パス概念:
-`raw/{user_uid}/{source_type}/{yyyy}/{mm}/{opaque_file_id}`
+### Firestore: operational
+推奨collection概念:
+- `users/{uid}/products/{productId}`
+- `users/{uid}/productVariants/{variantId}`
+- `users/{uid}/purchaseOrders/{orderId}`
+- `users/{uid}/purchaseLines/{lineId}`
+- `users/{uid}/financialTransactions/{transactionId}`
+- `users/{uid}/transactionOrderLinks/{linkId}`
+- `users/{uid}/inventoryEvents/{eventId}`
+- `users/{uid}/imports/{importId}`
+
+既存機能のような「1 documentに配列全体を保存」は生活データでは採用しない。1論理レコード=1 documentを基本にする。
+
+### Cloud Storage: raw
+非公開原本を保持する。
+
+パス概念:
+`raw/{uid}/{source_type}/{yyyy}/{mm}/{opaque_file_id}`
 
 要件:
 - public access禁止
-- API/取込サービスアカウントのみ必要最小権限
-- `source_files`にstorage URI / hash / parser_version / statusを記録
-- 原本削除と正規化データ削除を別々に追跡可能にする
+- API/取込サービスアカウントのみアクセス
+- content hashを保持
+- parser version / parse statusをFirestoreのimports/source metadataに保持
+- 実データをGitHubへ保存しない
 
-### BigQuery
-第一候補の分析・突合ストア。
+### BigQuery: analytical
+論理領域:
+- `parsed_*`: 原本から機械抽出した行
+- `reconciliation_*`: 突合候補・検証用
+- `derived_*`: purchase interval / consumption metrics / replenishment candidates
 
-論理dataset例:
-- `ingestion`: source_files / import metadata
-- `parsed`: 原本から機械抽出した値
-- `curated`: products / variants / purchase_orders / purchase_lines / inventory_events
-- `reconciliation`: financial_transactions / transaction_order_links
-- `derived`: inventory_state / consumption_metrics / replenishment_candidates
+Firestore正本とBigQuery派生データが競合した場合はFirestoreを正とする。
+BigQuery側は再生成可能にする。
 
-物理dataset分割は実装時に簡素化してよいが、raw/parsed/curated/derivedの責務は混ぜない。
-
-### Backend API
-Cloud Runを第一候補とする。
+## 4. Cloud Run API
+Cloud RunをMVPのバックエンド第一候補とする。
 
 理由:
-- HTTP APIとバッチ/ジョブ処理を同じコンテナ技術へ寄せやすい
-- PDF/CSVパーサ、ライブラリ、処理時間の自由度がFunctionsより高い
-- 将来のChatGPT/iPhone Shortcut等の外部入口も同じ認証境界へ寄せられる
+- HTTP APIとparser/バッチをコンテナで統一できる
+- PDF/CSV処理ライブラリの自由度が高い
+- Firebase token検証を共通化できる
+- 将来のiPhone Shortcut / ChatGPT等も同じAPI境界へ接続できる
 
-Cloud Functionsは、単純なStorageイベント起動等が必要になった場合の補助候補とする。MVPでは両方を導入しない。
+Cloud Functions / Pub/Sub / Dataflowは、必要性が出るまで追加しない。
 
-## 4. 書き込み経路
+## 5. 書き込み経路
 
-### 手入力イベント
-Portal → API → 検証 → inventory_event保存 → 現在状態再計算
+### 手入力
+Portal → Cloud Run API → token検証 → Firestore transaction/batch → inventory_event保存 → 状態更新
 
-### ファイル取込
-Portal → APIでアップロード開始 → Cloud Storage raw保存 → parser実行 → parsed保存 → candidate生成 → ユーザー確認 → curated確定
+### raw取込
+Portal → Cloud Run → Cloud Storage raw保存 → import metadata保存 → parser → parsed結果 → 候補確認 → Firestore curated確定
 
-### 原則
-- PortalからBigQueryへの直接writeは禁止
-- inventory_eventはAPIを共通書き込み境界とする
-- `user_id + idempotency_key`を一意として再送をno-op化
-- 同一keyで異なるpayloadは409相当の競合として扱う
+### 分析
+Firestore/parsed結果 → BigQuery → 集計/突合候補 → API → Portal
 
-## 5. 必要なAPI（MVP）
-1. `POST /imports` 原本登録/取込開始
-2. `GET /imports/{id}` 解析状況・エラー取得
-3. `GET /purchase-candidates` 取込候補確認
-4. `POST /inventory-events` 在庫イベント登録
-5. `GET /inventory` 現在状態取得
-6. `GET /inventory-events` 履歴取得
-7. `POST /inventory-events/{id}/void-or-correct` 訂正/取消
+BigQueryの結果からinventory_eventを無確認で直接確定しない。
 
-初期MVPではこの程度に限定し、汎用CRUD APIにはしない。
+## 6. 冪等性・整合性
+- `user_id + idempotency_key`を論理的一意キーとする。
+- 同一key・同一payloadはno-op。
+- 同一key・異なるpayloadは409相当の競合。
+- purchase_lineだけでは在庫を増やさない。
+- receipt等のinventory_eventのみ在庫変化へ反映。
+- void/correction後は履歴から状態を再計算できる。
+- 負在庫・不正な状態遷移は確定せずconflict扱い。
 
-## 6. 主要クエリ/集計
+Firestoreでは一意制約そのものではなく、idempotency keyをdocument IDまたは専用lock/index documentとして設計し、transactionで競合を防ぐ。
 
-最低限次を支える。
-1. 商品別の現在在庫
-2. 商品別イベント履歴
-3. 未突合purchase / financial transaction候補
-4. 過去3〜6か月の購入回数・購入間隔
-5. 開封〜使い切りの有効観測一覧
+## 7. MVP API
+1. `POST /imports`
+2. `GET /imports/{id}`
+3. `GET /purchase-candidates`
+4. `POST /inventory-events`
+5. `GET /inventory`
+6. `GET /inventory-events`
+7. `POST /inventory-events/{id}/void-or-correct`
 
-JOINが必要なため、purchase / line / transaction / linkをFirestoreのネストだけで完結させるよりBigQuery等の関係・分析処理に向く基盤が有利。
+汎用CRUD APIにはしない。
 
-## 7. リアルタイム性
-MVPでは秒単位リアルタイム同期を要件にしない。
+## 8. 主要クエリ
+- 商品別現在在庫
+- 商品別イベント履歴
+- 未確認purchase/financial突合候補
+- 過去3〜6か月の購入回数・購入間隔
+- 開封〜使い切りの有効観測
 
-- 手入力後: APIレスポンス後に再取得で十分
-- ファイル取込: status pollingまたは明示更新で十分
-- 補充候補: イベント登録時または閲覧時更新から開始
+現在在庫と直近履歴はFirestore/APIで返す。
+期間集計・横断分析はBigQueryを使う。
 
-Pub/Sub / Dataflow /常時ストリーミング処理は導入しない。
+## 9. リアルタイム性
+MVPでは秒単位リアルタイム分析は不要。
+- 在庫登録: API完了直後に反映
+- import: pollingで十分
+- BigQuery分析: オンデマンドまたは低頻度バッチ
 
-## 8. セキュリティ
-- Firebase ID tokenをAPIで検証
-- uidをサーバー側で確定
-- Cloud Storage bucketは非公開
-- BigQueryへブラウザから直接接続しない
+常時ストリーミング処理は導入しない。
+
+## 10. セキュリティ
+- Firebase ID tokenをCloud Runで検証
+- uidはtokenから確定し、request bodyのuser_idを信用しない
+- Firestore/Storage/BigQueryへの生活データ書込は原則APIサービスアカウント経由
+- Cloud Storageは非公開
+- BigQueryはブラウザ直接アクセス禁止
 - サービスアカウントは最小権限
-- 実データ・注文番号・金融明細を公開GitHubへ保存しない
-- 開発/本番は少なくともStorage bucket / dataset / API設定を分離する
+- 実データを公開GitHubに置かない
 
-Firestore Security RulesとApp Checkの現状は別途実環境確認が必要。
+未確認:
+- 現行Firestore Security Rules
+- App Check
+- 本番Firebase/GCPのIAM設定
 
-## 9. バックアップ/復元
-- raw原本は再解析可能な一次ソースとして保持
-- curatedデータはエクスポート可能にする
-- inventory current stateはイベントから再構築可能にする
-- 派生テーブルは消失しても再計算可能にする
+## 11. バックアップ/復元
+優先順位:
+1. raw原本
+2. Firestore operational record / inventory event履歴
+3. BigQuery派生データ
 
-「派生状態のバックアップ」より「raw + event履歴の保持」を優先する。
+BigQuery派生データは再生成可能にする。
+現在状態もinventory_eventから再構築できるようにする。
 
-## 10. 候補比較
+## 12. 候補比較
 
-### A. Firestore中心
-有利: 実装量・サービス数を最小化したい場合。
-不利: 多対多突合、履歴再処理、分析クエリが増えるほどモデルが複雑。
+### Firestoreだけ
+優先: サービス数・実装量の最小化。
+弱点: 大量の横断分析・多対多突合SQLが増えると実装が煩雑。
 
-### B. Supabase/PostgreSQL追加
-有利: 強いトランザクション、関係モデルを単一DBで扱いたい場合。
-不利: Firebase Authとの統合と新たな運用系統が増える。Google Cloudで原本/分析を持つ場合は基盤が分散する。
+### Firestore + BigQuery + Storage + Cloud Run（採用候補）
+優先: 既存Portalを壊さず、operationalとanalyticsを分離する。
+弱点: サービス数とIAM/監視対象は増える。
 
-### C. Firebase + Google Cloud併用（採用候補）
-有利: 既存機能を壊さず、raw保管・分析・API処理を段階追加できる。
-不利: FirestoreとGCPの2系統になり、IAM/課金/監視の理解が必要。
+### PostgreSQL/Supabase/Cloud SQL
+優先: JOIN、外部キー、一意制約、複雑なOLTPを単一RDBで厳密に扱う。
+弱点: 今回の個人MVPでは新DB運用・認証統合コストが先に発生する。
 
-### D. 全面移行
-有利: 最終的に単一方式へ統一できる。
-不利: MVP前の移行コストが最大。現時点では便益不足。
+### 全面移行
+優先: 最終的な基盤統一。
+弱点: MVP価値に対して移行工数が過大。
 
-優先順位が「早くMVPを作り、既存Portalを壊さない」ならCが有利。
-「全データを厳密なOLTPの単一RDBへ統一」が最優先ならB/Dを再評価する。
+現時点では「MVPを早く動かす」「既存ログイン/機能を壊さない」「後から分析を拡張する」を優先し、Firestore write model + GCP分析系を採る。
 
-## 11. 費用方針
-個人利用MVPのデータ量は小さい前提とし、従量課金サービスを最小構成で使う。
+## 13. 費用前提（2026-10確認）
+個人利用MVPの仮定:
+- 1ユーザー
+- inventory event: 100〜1,000件/月
+- API: 数百〜数千request/月
+- rawファイル: 数十〜数百MB、将来1GB程度
+- BigQuery query: 数GB〜数十GB/月
 
-ただし正式な採用前に、Cloud Storage / BigQuery / Cloud Runの現行料金・無料枠・リージョン条件を公式情報で再確認し、月間件数仮定を置いて月額概算を追記する。
+この規模は公式free tierと比較して十分小さい。
+- Firestore Standard: 1GiB保存、50,000 reads/day、20,000 writes/day等のfree quotaあり。
+- Cloud Run: CPU 240,000 vCPU-sec/月、memory 450,000 GiB-sec/月等のfree tierあり。
+- BigQuery on-demand: query 1TiB/月までfree、logical storage 10GiBまでfree。
+- Cloud Storageは保存量・操作・転送に従量課金。1GB前後ならストレージ料金自体は月数セント規模を想定するが、リージョン/操作/転送で変動する。
 
-費用が想定より高い場合の縮退案:
-- BigQuery常用をやめ、Cloud Storage + 小規模DBへ寄せる
-- バッチ頻度を下げる
-- derived計算をオンデマンドにする
+したがってMVPの**目標月額は0〜数百円、通常利用ではほぼ無料枠内**と置く。請求ゼロは保証しないためbilling budget alertを設定する。
 
-## 12. 撤回可能性
-この構成は段階導入とする。
+## 14. リージョン
+ユーザー/Portal利用地とレイテンシを考慮し、東京リージョンを第一候補とする。
+Storage / Cloud Run / BigQueryのデータ配置は可能な範囲で同一地域へ寄せ、不要なリージョン間転送を避ける。
 
-- 既存Firestoreは変更しない
-- 新規生活データ機能だけAPI配下へ置く
-- UIからAPIを外せば既存Portalへ影響せず撤回できる
-- raw/curatedのexport形式を用意し、別DBへ移せるようにする
+既存Firestoreのlocationは変更困難なため、実プロジェクトのlocation確認後に最終決定する。
 
-## 13. 未解決事項
-- Amazon原本の外部ID・数量・価格・分割発送粒度
-- Firestore Security Rules / App Checkの実設定
-- GCP現行料金の正式確認と月額概算
-- Cloud RunのリージョンとBigQuery/Storageの配置
-- BigQueryをイベント正本にするか、書き込み系に別OLTPストアを追加するかの最終判断
+## 15. 撤回可能性
+- 既存Wishlist等を変更しない
+- 新生活データはcollection/API境界を分離
+- BigQueryは派生先なので削除してもoperational dataは残る
+- export可能なJSON/CSV形式を持つ
 
-最後の論点は重要。MVPの書き込み頻度・トランザクション要件が低ければBigQuery中心で開始可能だが、イベント登録の一意制約や競合制御を厳密に行うならCloud SQL/Firestore等をwrite modelとして追加する余地を残す。
+将来RDBが必要になった場合もCloud Run APIの背後を置換しやすくする。
 
-## 14. 次の実装Issue候補
-ADR確定後、以下を分割する。
-1. GCPプロジェクト/環境・IAM・Storage作成
-2. Firebase ID token検証付きCloud Run API skeleton
-3. source_files + raw upload経路
-4. MF CSV parser / parsed保存
-5. inventory_event write + idempotency
-6. inventory state query/API
-7. Portal在庫画面/履歴画面
-8. purchase-financial reconciliation UI
+## 16. Amazon待ちでも進められる範囲
+Amazonに依存しない:
+- Firebase token認証API
+- raw Storage
+- import metadata
+- MF CSV parser
+- products/productVariants
+- inventoryEvents + idempotency
+- inventory state API/UI
+
+Amazon確認後に追加確定:
+- external_line_id/product_code/product_url
+- quantity/price粒度
+- shipment識別子
+- EC返品/キャンセル連携
+
+## 17. 次の実装Issue
+1. GCP/Firebase実環境・Security Rules・location確認
+2. Cloud Run API skeleton + Firebase ID token検証
+3. Cloud Storage raw upload + imports metadata
+4. Firestore生活データcollection + security/index設計
+5. MF CSV parser
+6. inventory event write + idempotency + state再計算
+7. Portal在庫/履歴UI
+8. BigQuery分析連携
+9. purchase-financial reconciliation UI
