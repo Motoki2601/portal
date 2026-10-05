@@ -29,7 +29,11 @@ export function createAiBudgetGate(db, { scope = 'personal-commerce', clock = ()
           if (old.data().fingerprint !== fingerprint) throw new Error('Operation ID conflict');
           const control = await tx.get(root);
           if (control.exists && control.data().blocked) return deny('COST_OVERRUN');
-          return { allowed: old.data().state === 'reserved' && old.data().month === month, reservationId: operationId, state: old.data().state, replay: true };
+          const prior = old.data();
+          const replay = { reservationId: operationId, state: prior.state, replay: true };
+          if (prior.state !== 'reserved') return { ...deny('OPERATION_NOT_RESERVABLE'), ...replay };
+          if (prior.month !== month) return { ...deny('RESERVATION_MONTH_EXPIRED'), ...replay };
+          return { allowed: true, ...replay };
         }
         const [ledgerSnap, control] = await Promise.all([tx.get(ledgerRef), tx.get(root)]);
         const ledger = ledgerSnap.exists ? ledgerSnap.data() : { committedMicros: 0, heldMicros: 0 };
