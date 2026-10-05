@@ -34,7 +34,27 @@
 
 `validateAiRuntimeConfig`は承認モデル、数値version固定Secret参照、料金/為替とその根拠versionを検証。料金/為替を実装に固定しない。入力料金、output料金（thinking込み）、検索単価、保守的為替を公式資料と日付付きで運用設定へ与える。無料枠を上限保証へ使わない。検証は型/存在確認であり公式料金の真正性や最大呼出量を証明しない。
 
-Secret Manager APIの取得は後続adapter。設定/ログにsecret値・token・生メールを置かない。runtime SAには必要なSecret/versionだけsecretAccessor。OAuth accountKey→Secret参照はサーバー管理、ブラウザから指定させない。参照一覧・最小IAM差分・料金根拠・匿名検証・rollbackを揃えて本番承認を求める。現状の台帳collectionはブラウザRulesで許可されずAdmin SDKのみ。
+Secret Manager API取得の共通readerを実装（下記）。実Gemini/OAuth/runtimeへの接続は未完了。設定/ログにsecret値・token・生メールを置かない。runtime SAには必要なSecret/versionだけsecretAccessor。OAuth accountKey→Secret参照はサーバー管理、ブラウザから指定させない。参照一覧・最小IAM差分・料金根拠・匿名検証・rollbackを揃えて本番承認を求める。現状の台帳collectionはブラウザRulesで許可されずAdmin SDKのみ。
+
+### 固定Secret reader（2026-10-06）
+
+`createPinnedSecretReader({allowedReferences,credential?,fetchImpl?,timeoutMs?})`は固定数値versionのserver allowlistを受け取り、`read(reference,{signal?})`でBufferを返す。生成時にはnetwork accessなし。runtime接続後はFirebase AdminのADC credentialを利用。固定Google HTTPS endpointのGETだけを実行しredirect/retryを禁止。認証取得から応答取得まで既定10秒。SDKの認証取得自体を取り消せない場合でも期限後にSecret fetchへ進まない。
+
+レスポンスのresource name完全一致、base64、非空/64KiB上限、CRC32Cを検証。不明・403・破損・timeoutはSECRET_UNAVAILABLEのみ返し、token/payload/provider例外のcauseを出さない。参照はproject IDまたはproject numberを利用可。Googleがproject IDをnumberに正規化すると完全一致検証で拒否するため、運用時に正規resource名を確認してallowlistへ固定する。自動的なproject対応付けをしない。取得したBufferは呼出adapter内だけで利用し返答/ログに含めない。
+
+実Secretの作成/取得、API有効化、IAM変更は未実施。偽credential/transportと匿名payloadで正常/禁止参照/CRC/403/timeoutを検証。公式: [Access REST](https://docs.cloud.google.com/secret-manager/docs/reference/rest/v1/projects.secrets.versions/access)、[Data integrity](https://docs.cloud.google.com/secret-manager/docs/data-integrity)。
+
+### 料金計算と予約生成（2026-10-06）
+
+`calculateAiCostMicros(config,{inputTokens,outputTokens,searchQueries})`はBigIntで合計計算してmicro-JPY単位へ切り上げる。outputTokensはthinking等を含む全課金出力。料金/為替は設定入力であり生成文章や無料共有枠を利用しない。算式は `(inputTokens × inputUsdMicrosPerMillion + outputTokens × outputUsdMicrosPerMillion + searchQueries × searchUsdMicrosPerQuery × 1,000,000) × jpyMicrosPerUsd / 10^12` を切り上げ。負数/小数/欠落/安全整数超過は拒否する。
+
+`createAiCostReservation(config,{maxInputTokens,maxOutputTokens,maxSearchQueries,tokenBoundEvidence,searchBoundEvidence?})`は検証済み上限の予約を生成。モデル仕様以上のtoken上限、token根拠欠落、検索ありでquery上限根拠欠落は拒否。料金/為替/上限/根拠を予約のpricingVersion hashへ含め、同じ表示versionでも値が変われば入力競合になる。
+
+根拠文字列の存在は料金/最大呼出量の真正性を自動証明しない。信頼するadapterが入力全体（schema/Tool結果を含む）、thinkingを含む出力、candidate数、検索回数の実効上限を確認し、実requestへ強制する必要がある。そのadapterはまだ未実装。query上限が確認できない実Google Search callは無効のままにする。テスト上のsearchBoundEvidenceは匿名fixtureでありGoogle API保証の証拠ではない。
+
+公式料金の2026-10-06読取り: Standard入力USD0.30/百万token、出力USD2.50/百万token（thinking含む）。Google Searchは共有無料枠後USD14/1000、各queryを課金。料金はコードへ固定せず本番設定時に再確認。テスト換算150円/USDはfixtureであり承認済み為替ではない。固定モデルの仕様上限は入力1,048,576/出力65,536token。出典: [料金](https://ai.google.dev/gemini-api/docs/pricing)、[検索の課金単位](https://ai.google.dev/gemini-api/docs/google-search)、[モデル仕様](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)。
+
+共通reader/料金計算/費用gateの結合は偽providerで検証済み。停止時はSecretを取得せず、実キー/有料callを使わない。
 
 ## 検証と再開
 
