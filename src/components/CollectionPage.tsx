@@ -12,12 +12,14 @@ interface Props {
   footerExtra?: ReactNode;
   modal?: ReactNode;
   saveError?: boolean;
+  ready?: boolean;
+  loadError?: boolean;
   children: ReactNode;
 }
 
 export default function CollectionPage({
   title, onBack, emptyIcon, itemCount, totalCount, onAdd,
-  filterBar, footerExtra, modal, saveError, children,
+  filterBar, footerExtra, modal, saveError, ready = true, loadError = false, children,
 }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-white to-slate-50">
@@ -39,11 +41,14 @@ export default function CollectionPage({
         className="max-w-2xl mx-auto px-4 pt-5 space-y-4"
         style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}
       >
+        {!ready && <p role={loadError ? 'alert' : 'status'} className="text-center text-sm text-slate-500 py-4">
+          {loadError ? 'リストを取得できませんでした。再読み込みしてください。' : 'サーバーからリストを読み込み中です。通信状況を確認してください。'}
+        </p>}
         {/* フィルタバー */}
         {totalCount > 0 && filterBar}
 
         {/* アイテム一覧 */}
-        {itemCount === 0 ? (
+        {!ready ? null : itemCount === 0 ? (
           <div className="text-center py-24 text-slate-400">
             {totalCount === 0 ? (
               <>
@@ -71,7 +76,7 @@ export default function CollectionPage({
         >
           <div className="flex items-center gap-2 bg-rose-600 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
             <AlertTriangle size={16} />
-            保存に失敗しました。通信状況を確認してください
+            保存できませんでした。通信状況や他の端末での変更を確認してください
           </div>
         </div>
       )}
@@ -95,6 +100,7 @@ export default function CollectionPage({
             {/* 追加ボタン */}
             <button
               onClick={onAdd}
+              disabled={!ready}
               className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 active:scale-95 text-white px-6 py-2.5 rounded-2xl text-sm font-semibold shadow-md shadow-indigo-200 transition-all"
             >
               <Plus size={17} strokeWidth={2.5} />

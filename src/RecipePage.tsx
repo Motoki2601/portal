@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function RecipePage({ user, onBack }: Props) {
-  const { items, upsert, remove, update, saveError } = useCollection<RecipeItem>(user.uid, subscribeRecipes, saveRecipes);
+  const { items, upsert, remove, update, saveError, ready, loadError } = useCollection<RecipeItem>(user.uid, subscribeRecipes, saveRecipes);
   const [editItem, setEditItem] = useState<RecipeItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
@@ -37,9 +37,10 @@ export default function RecipePage({ user, onBack }: Props) {
   const openEdit = (item: RecipeItem) => { setEditItem(item); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditItem(null); };
 
-  const handleSave = (data: Omit<RecipeItem, 'id' | 'createdAt' | 'updatedAt'>) => {
-    upsert(data, editItem);
-    closeModal();
+  const handleSave = async (data: Omit<RecipeItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const saved = await upsert(data, editItem);
+    if (saved) closeModal();
+    return saved;
   };
 
   const handleToggleCooked = (id: string) => {
@@ -56,6 +57,8 @@ export default function RecipePage({ user, onBack }: Props) {
       totalCount={items.length}
       onAdd={openAdd}
       saveError={saveError}
+      ready={ready}
+      loadError={loadError}
       filterBar={
         <RecipeFilterBar
           tags={tags}
@@ -68,7 +71,7 @@ export default function RecipePage({ user, onBack }: Props) {
         />
       }
       modal={showModal && (
-        <RecipeModal item={editItem} onSave={handleSave} onClose={closeModal} />
+        <RecipeModal key={editItem?.id ?? 'new'} item={editItem} onSave={handleSave} onClose={closeModal} />
       )}
     >
       <div className="space-y-3">

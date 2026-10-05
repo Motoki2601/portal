@@ -1,0 +1,30 @@
+name: Frontend checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - '*config*'
+      - '.github/workflows/frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx eslint src
+      - run: node --test test/collection-operations.test.mjs

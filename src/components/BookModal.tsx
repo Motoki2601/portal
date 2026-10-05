@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, Star, Search } from 'lucide-react';
 import type { BookItem, BookStatus } from '../types';
 import { searchBooks, type BookSuggestion, type SearchField } from '../googleBooks';
 
 interface Props {
   item?: BookItem | null;
-  onSave: (data: Omit<BookItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (data: Omit<BookItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -16,13 +16,13 @@ const STATUSES: { value: BookStatus; label: string }[] = [
 ];
 
 export default function BookModal({ item, onSave, onClose }: Props) {
-  const [title, setTitle] = useState('');
-  const [author, setAuthor] = useState('');
-  const [status, setStatus] = useState<BookStatus>('want');
-  const [rating, setRating] = useState(0);
-  const [memo, setMemo] = useState('');
+  const [title, setTitle] = useState(item?.title ?? '');
+  const [author, setAuthor] = useState(item?.author ?? '');
+  const [status, setStatus] = useState<BookStatus>(item?.status ?? 'want');
+  const [rating, setRating] = useState(item?.rating ?? 0);
+  const [memo, setMemo] = useState(item?.memo ?? '');
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>(item?.tags ?? []);
 
   const [searchField, setSearchField] = useState<SearchField>('title');
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,16 +30,6 @@ export default function BookModal({ item, onSave, onClose }: Props) {
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
 
-  useEffect(() => {
-    if (item) {
-      setTitle(item.title);
-      setAuthor(item.author);
-      setStatus(item.status);
-      setRating(item.rating);
-      setMemo(item.memo);
-      setTags(item.tags);
-    }
-  }, [item]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -66,30 +56,37 @@ export default function BookModal({ item, onSave, onClose }: Props) {
 
   const removeTag = (t: string) => setTags(tags.filter(x => x !== t));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!title.trim()) return;
-    onSave({
+    setSaving(true);
+    try {
+      await onSave({
       title: title.trim(),
       author: author.trim(),
       status,
       rating,
       memo: memo.trim(),
       tags,
-    });
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-      onClick={e => e.target === e.currentTarget && onClose()}
+      onClick={e => !saving && e.target === e.currentTarget && onClose()}
     >
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-indigo-900">
             {item ? '本を編集' : '本を追加'}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" aria-label="閉じる">
+          <button onClick={onClose} disabled={saving} className="p-1 rounded-full hover:bg-gray-100" aria-label="閉じる">
             <X size={20} />
           </button>
         </div>
@@ -303,13 +300,14 @@ export default function BookModal({ item, onSave, onClose }: Props) {
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={onClose} disabled={saving}
               className="flex-1 py-2.5 border rounded-xl text-sm text-gray-600 hover:bg-gray-50"
             >
               キャンセル
             </button>
             <button
               type="submit"
+              disabled={saving}
               className="flex-1 py-2.5 bg-indigo-700 text-white rounded-xl text-sm font-medium hover:bg-indigo-800"
             >
               {item ? '保存' : '追加'}

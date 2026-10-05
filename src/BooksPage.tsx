@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function BooksPage({ user, onBack }: Props) {
-  const { items, upsert, remove, saveError } = useCollection<BookItem>(user.uid, subscribeBooks, saveBooks);
+  const { items, upsert, remove, saveError, ready, loadError } = useCollection<BookItem>(user.uid, subscribeBooks, saveBooks);
   const [editItem, setEditItem] = useState<BookItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
@@ -37,9 +37,10 @@ export default function BooksPage({ user, onBack }: Props) {
   const openEdit = (item: BookItem) => { setEditItem(item); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditItem(null); };
 
-  const handleSave = (data: Omit<BookItem, 'id' | 'createdAt' | 'updatedAt'>) => {
-    upsert(data, editItem);
-    closeModal();
+  const handleSave = async (data: Omit<BookItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const saved = await upsert(data, editItem);
+    if (saved) closeModal();
+    return saved;
   };
 
   return (
@@ -51,6 +52,8 @@ export default function BooksPage({ user, onBack }: Props) {
       totalCount={items.length}
       onAdd={openAdd}
       saveError={saveError}
+      ready={ready}
+      loadError={loadError}
       filterBar={
         <BookFilterBar
           tags={tags}
@@ -63,7 +66,7 @@ export default function BooksPage({ user, onBack }: Props) {
         />
       }
       modal={showModal && (
-        <BookModal item={editItem} onSave={handleSave} onClose={closeModal} />
+        <BookModal key={editItem?.id ?? 'new'} item={editItem} onSave={handleSave} onClose={closeModal} />
       )}
     >
       <div className="space-y-3">
