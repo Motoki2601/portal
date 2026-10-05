@@ -83,6 +83,16 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
           </div>
         </div>
 
+        <label className="mt-3 flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={item.purchased}
+            onChange={() => onTogglePurchased(item.id)}
+            className="w-3.5 h-3.5 accent-indigo-600"
+          />
+          <span className="text-xs text-gray-600">購入済み</span>
+        </label>
+
         {/* 展開ボタン */}
         {(item.memo || item.url) && (
           <button
@@ -116,15 +126,6 @@ export default function ItemCard({ item, onEdit, onDelete, onTogglePurchased }: 
                 <p className="text-xs text-gray-700 whitespace-pre-wrap">{item.memo}</p>
               </div>
             )}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={item.purchased}
-                onChange={() => onTogglePurchased(item.id)}
-                className="w-3.5 h-3.5 accent-indigo-600"
-              />
-              <span className="text-xs text-gray-600">購入済み</span>
-            </label>
           </div>
         )}
       </div>

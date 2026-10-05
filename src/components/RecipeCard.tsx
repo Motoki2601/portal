@@ -84,6 +84,16 @@ export default function RecipeCard({ item, onEdit, onDelete, onToggleCooked }: P
           </div>
         </div>
 
+        <label className="mt-3 flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={item.cooked}
+            onChange={() => onToggleCooked(item.id)}
+            className="w-3.5 h-3.5 accent-indigo-600"
+          />
+          <span className="text-xs text-gray-600">作った</span>
+        </label>
+
         {/* 展開ボタン */}
         {(item.memo || item.ingredients || item.url) && (
           <button
@@ -124,15 +134,6 @@ export default function RecipeCard({ item, onEdit, onDelete, onToggleCooked }: P
                 <p className="text-xs text-gray-700 whitespace-pre-wrap">{item.memo}</p>
               </div>
             )}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={item.cooked}
-                onChange={() => onToggleCooked(item.id)}
-                className="w-3.5 h-3.5 accent-indigo-600"
-              />
-              <span className="text-xs text-gray-600">作った</span>
-            </label>
           </div>
         )}
       </div>
