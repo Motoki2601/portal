@@ -45,6 +45,8 @@ POST `/corrections`。必須: clientMutationId、collection、id、field、actio
 
 POST `/recommendations` またはsave_recommendation。currentPriceは不明ならnull。価格がある場合は非負のsafe整数amountMinor、ISO通貨コード、HTTPS根拠URL、実在するUTC時刻(`YYYY-MM-DDTHH:mm:ss.sssZ`、未来不可)必須。alternativesは最大5件、各name/url/rationale/currentPriceを必須とする。URLは保存する根拠情報で、ApplicationがfetchするURLではない。価格や商品適合の真偽は調査providerの責任。購入価格合計から現在単価を作らない。
 
+HTTP body上限は `/recommendations` と `/tools/call` が256KiB（UTF-8 bytes、JSON envelope込み）。推薦の最大5候補・各URL最大2048文字・日本語やJSON Unicode escapeを含む最大長入力を受理できる。上限超過は413。その他の補正・状態更新routeは8KiBを維持する。
+
 get_product_contextのcontextFingerprintは商品・状態・算出入力・推定・候補を含み、算出時刻は含めない。保存transactionで最新文脈を再計算し、一致しなければ409。日付境界・対象状態・訂正等で候補が変わったら再読出しする。保存済みmutationのretryはその時のsnapshotを返す。推薦は独立して追記し、商品・購入事実を書き換えない。価格はgeneratedAt時点の観測snapshotであり常時の現在価格ではない。
 
 HTTPは既存Firebase認証、UID/origin allowlist、body上限、no-store、秘匿ログ方針を共用。本番には未反映。

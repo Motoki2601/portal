@@ -47,7 +47,9 @@ export function createApi({ application, verifyToken, allowedOrigins, allowedUid
         if (url.search) throw invalid('Query parameters are not accepted');
         if (req.headers['content-type']?.split(';')[0].trim() !== 'application/json') throw invalid('Content-Type must be application/json');
         const chunks = await new Promise((resolve, reject) => {
-          const maxBytes = url.pathname === '/imports/amazon-csv' ? 256 * 1024 : 8192;
+          // Recommendations allow five researched alternatives and long URLs/text.
+          // The tool envelope must accept the same payload as the direct route.
+          const maxBytes = ['/imports/amazon-csv', '/recommendations', '/tools/call'].includes(url.pathname) ? 256 * 1024 : 8192;
           let size = 0; const parts = [];
           req.on('data', chunk => { size += chunk.length; if (size <= maxBytes) parts.push(chunk); });
           req.on('end', () => size > maxBytes ? reject(new AppError('INVALID_ARGUMENT', 'Body too large', 413)) : resolve(parts));

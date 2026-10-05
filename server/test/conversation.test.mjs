@@ -65,3 +65,31 @@ test('new HTTP routes preserve token authentication and deny model write escalat
   assert.equal((await post('/recommendations', { ...recommendation, uid: 'other' })).status, 400);
   assert.equal((await post('/tools/call?uid=other', context)).status, 400);
 });
+
+test('HTTP accepts maximum recommendation fields directly and through tools, with bounded bodies', async t => {
+  const a = app();
+  const prefix = 'https://example.invalid/';
+  const url = prefix + '品'.repeat(2048 - prefix.length);
+  const price = { amountMinor: Number.MAX_SAFE_INTEGER, currency: 'JPY', sourceUrl: url, observedAt: '2026-10-04T00:00:00.000Z' };
+  const input = { ...recommendation, clientMutationId: 'm'.repeat(128), productId: 'p'.repeat(128), rationale: '理'.repeat(2000), recommendedProduct: { name: '品'.repeat(500), url }, currentPrice: price, aiModel: '模'.repeat(100), alternatives: Array.from({ length: 5 }, () => ({ name: '品'.repeat(500), url, rationale: '理'.repeat(1000), currentPrice: price })) };
+  await a.saveRecommendation('owner', input); // Prove that the application accepts this input.
+  const api = createApi({ application: a, verifyToken: async () => ({ uid: 'owner' }), allowedUids: ['owner'], allowedOrigins: ['https://portal.invalid'] });
+  api.listen(0, '127.0.0.1'); await once(api, 'listening');
+  t.after(() => new Promise(r => { api.close(r); api.closeAllConnections(); }));
+  const post = (path, body) => fetch(`http://127.0.0.1:${api.address().port}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' }, body });
+  // Escaped Unicode is valid JSON and takes six bytes per character on the wire.
+  const encode = value => JSON.stringify(value).replace(/[^\x00-\x7f]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  for (const [path, value] of [['/recommendations', input], ['/tools/call', { name: 'save_recommendation', arguments: input }]]) {
+    const body = encode(value);
+    assert(Buffer.byteLength(body) > 8192);
+    assert(Buffer.byteLength(body) < 256 * 1024);
+    const response = await post(path, body);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).input.alternatives.length, 5);
+    const atLimit = body + ' '.repeat(256 * 1024 - Buffer.byteLength(body));
+    assert.equal((await post(path, atLimit)).status, 200);
+    assert.equal((await post(path, atLimit + ' ')).status, 413);
+  }
+  // Small mutation routes retain their original limit.
+  assert.equal((await post('/corrections', '{}' + ' '.repeat(8191))).status, 413);
+});
