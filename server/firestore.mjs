@@ -16,13 +16,17 @@ export function createFirestoreRepository(db) {
   return {
     async readHistory(uid) {
       const root = user(uid);
-      const read = async name => {
-        const snap = await root.collection(name).limit(5001).get();
-        if (snap.size > 5000) throw new AppError('RESOURCE_EXHAUSTED', 'Personal-scale history limit exceeded', 413);
-        return snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      };
-      const [orders, lines, products] = await Promise.all(['purchaseOrders', 'purchaseLines', 'products'].map(read));
-      return { orders, lines, products };
+      // An atomic import may commit while these collections are being read.
+      // Use one snapshot so a line never sees an order/product from another version.
+      return db.runTransaction(async tx => {
+        const read = async name => {
+          const snap = await tx.get(root.collection(name).limit(5001));
+          if (snap.size > 5000) throw new AppError('RESOURCE_EXHAUSTED', 'Personal-scale history limit exceeded', 413);
+          return snap.docs.map(d => ({ ...d.data(), id: d.id }));
+        };
+        const [orders, lines, products] = await Promise.all(['purchaseOrders', 'purchaseLines', 'products'].map(read));
+        return { orders, lines, products };
+      }, { readOnly: true });
     },
     async recordState(uid, input) {
       const root = user(uid);

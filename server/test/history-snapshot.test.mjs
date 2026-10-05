@@ -65,7 +65,7 @@ test('purchase history remains coherent when an atomic import commits during rea
 test('purchase history still rejects a collection beyond the 5000-document limit', async () => {
   const db = {
     collection: () => ({ doc: () => ({ collection: name => ({
-      limit: limit => { assert.equal(limit, 5001); return { name }; },
+      limit: limit => { assert.equal(limit, 5001); return { name, get: async () => ({ size: name === 'purchaseLines' ? 5001 : 0, docs: [] }) }; },
     }) }) }),
     runTransaction: async callback => callback({ get: async query => ({
       size: query.name === 'purchaseLines' ? 5001 : 0, docs: [],

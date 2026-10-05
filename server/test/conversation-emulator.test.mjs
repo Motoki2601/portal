@@ -33,7 +33,7 @@ test('anonymous history -> candidates -> research recommendation, corrections, s
       saved = { clientMutationId: 'recommendation-a', productId: 'shampoo-a', contextFingerprint: context.contextFingerprint, rationale: '周期上の確認時期です。在庫は不明です。', recommendedProduct: { name: '架空シャンプー', url: 'https://example.invalid/shampoo-a' }, currentPrice: { amountMinor: 900, currency: 'JPY', sourceUrl: 'https://example.invalid/shampoo-a', observedAt: '2026-10-04T12:00:00.000Z' }, alternatives: [{ name: '架空代替品', url: 'https://example.invalid/shampoo-b', rationale: '代替候補。適合はユーザー確認が必要。', currentPrice: null }], aiModel: 'fixture-provider' };
       return { toolCalls: [{ id: 'save', name: 'save_recommendation', arguments: saved }] };
     }
-    assert.match(messages.at(-1).result.recommendationId, /^[a-f0-9]{64}$/);
+    assert.equal(messages.at(-1).result.recommendation.currentPrice.amountMinor, 900);
     return { text: 'シャンプーが確認時期です。架空調査価格は900円、代替品の価格は不明です。' };
   } });
   assert.equal(reply.toolCallCount, 4);
