@@ -28,7 +28,7 @@ OAuth取得scopeは既存契約のgmail.readonly。送信scopeは#42で別同意
 1. ホストがverified UIDを束縛し、接続内部UUID accountKeyからGmail資格情報を解決する。公開レスポンスは接続状態のみ、refresh tokenはSecret経路のみ。AIやブラウザへ渡さない。
 2. 取得adapterは固定したepoch秒のafter/before窓とpageTokenで全ページを取得し、message ID/internalDate/raw bytesを復号境界へ渡す。初回180日、継続は前回成功水位から14日重複。全ページ取得完了まで水位を更新しない。Source保存失敗を取りこぼさない再開境界は#34でtransaction/再取得により検証する。
 3. MIMEはbase64url→transfer encoding→part charset→Unicode。plain優先、HTML重複計上なし。復号エラー/U+FFFDはDECODE_ERRORでAIを呼ばない。注文区切り/明細根拠refはAI前に生成。氏名/住所/支払情報/個別URLを除き、注文番号・注文日・商品ブロックだけを抽出する。
-4. AI呼出し前に#32の費用gateで月次費用を予約し、実績を確定する。停止時は未処理Sourceを保留。取得水位とAI処理成功を分離し、期間外のpending/failedも再試行対象にする。具体的gate API名/結果コードは#32に合わせる。
+4. AI呼出し前に#32の費用gateで月次費用を予約し、実績を確定する。停止時は未処理Sourceを保留。取得水位とAI処理成功を分離し、期間外のpending/failedも再試行対象にする。基盤担当との接続案: reserve({operationId,kind,model,upperBoundJpyMicro,pricingVersion,hardBoundVerified})→allowed/reservationId/code/fallback。claimDispatch(id)の原子的な発行権獲得後だけ外部呼出しを行い、settle/markUnknownで結果を確定。cancelは未dispatchのみ。停止fallbackは{deferImports:true,history:true,replenishment:true,notificationPrice:false}。このinterfaceは#32の受入と主担当レビュー待ち。Secret参照は数値version固定とし、参照検証と実token管理のownershipを分離する。
 5. 匿名入力→AI proposal→型/根拠検証→ingest_order_source。入力/出力は基本設計 §4.7の既存形。dispatchはorders=[]とrelatedExternalOrderIds、未対応cancel/return・日付欠損はSourceだけneeds_review。Amazon本文日付なしはinternalDateをJST日付へ変換しrule originを記録する。
 6. Source IDはSHA-256(["v1","gmail",accountKey,messageId])、注文予約はSHA-256(["v1","order",merchant,merchantAccountKey,externalOrderId])。Source/注文予約/注文・明細/監査を同transactionで更新。再処理はsourceLineRef、一意なidentifier/容量/包装の既存行のみ照合し、曖昧な場合に追加行を作らない。外部AIはtransaction内で呼ばない。
 7. 商品整理は本人固定→強いidentifier→完全な属性一致→根拠付きAI。未知容量/包装を一致扱いせず、曖昧ならproductId=null。訂正/属性/category変更の影響商品は既存周期計算へ接続する。
