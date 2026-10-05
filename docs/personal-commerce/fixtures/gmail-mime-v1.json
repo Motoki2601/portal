@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "description": "Synthetic MIME only. Decoded body is not PII-sanitized and is not AI-ready.",
+  "cases": [
+    {
+      "id": "iso2022-7bit",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PWlzby0yMDIyLWpwDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA3Yml0DQoNChskQiFaJDRDbUo4SFY5ZiFbGyhCIEZJWFRVUkUtTUlNRS0wMQobJEIhWiQ0Q21KOD4mSUohWxsoQgobJEIhJiFWMk02dSUvJWohPCVKITwbKEIgGyRCNU1CWBsoQiAzNTBtbBskQiFXGyhCCiAbJEI5ZzdXGyhCIDIgGyRCRUAbKEIgOTAwIBskQjFfGyhCCg",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "iso2022-base64",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PWlzby0yMDIyLWpwDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBiYXNlNjQNCg0KR3lSQ0lWb2tORU50U2poSVZqbG1JVnNiS0VJZ1JrbFlWRlZTUlMxTlNVMUZMVEF4Q2hza1FpRmFKRFJEYlVvNFBpWkpTaUZiR3loQwpDaHNrUWlFbUlWWXlUVFoxSlM4bGFpRThKVW9oUEJzb1FpQWJKRUkxVFVKWUd5aENJRE0xTUcxc0d5UkNJVmNiS0VJS0lCc2tRamxuCk4xY2JLRUlnTWlBYkpFSkZRQnNvUWlBNU1EQWdHeVJDTVY4YktFSUsK",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "utf8-quoted-printable",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBxdW90ZWQtcHJpbnRhYmxlDQoNCj1FMz04MD05MD1FMz04MT05ND1FNj1CMz1BOD1FNj05Nj04Nz1FNz05NT1BQT1FNT04Rj1CNz1FMz04MD05MSBGSVhUVVJFLU1JTT0KRS0wMQo9RTM9ODA9OTA9RTM9ODE9OTQ9RTY9QjM9QTg9RTY9OTY9ODc9RTU9OTU9ODY9RTU9OTM9ODE9RTM9ODA9OTEKPUUzPTgzPUJCPUUzPTgwPThDPUU2PTlFPUI2PUU3PUE5PUJBPUUzPTgyPUFGPUUzPTgzPUFBPUUzPTgzPUJDPUUzPTgzPThBPUUzPQo9ODM9QkMgPUU4PUE5PUIwPUU2PTlCPUJGIDM1MG1sPUUzPTgwPThECiA9RTU9OTA9ODg9RTg9QTg9ODggMiA9RTc9ODI9QjkgOTAwID1FNT04Nj04Ngo",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "utf8-8bit",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCuOAkOOBlOazqOaWh-eVquWPt-OAkSBGSVhUVVJFLU1JTUUtMDEK44CQ44GU5rOo5paH5ZWG5ZOB44CRCuODu-OAjOaetuepuuOCr-ODquODvOODiuODvCDoqbDmm78gMzUwbWzjgI0KIOWQiOioiCAyIOeCuSA5MDAg5YaGCg",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "plain-before-html",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvYWx0ZXJuYXRpdmU7IGJvdW5kYXJ5PSJmaXh0dXJlLWJvdW5kYXJ5Ig0KDQotLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogOGJpdA0KDQrjgJDjgZTms6jmlofnlarlj7fjgJEgRklYVFVSRS1NSU1FLTAxCuOAkOOBlOazqOaWh-WVhuWTgeOAkQrjg7vjgIzmnrbnqbrjgq_jg6rjg7zjg4rjg7wg6Kmw5pu_IDM1MG1s44CNCiDlkIjoqIggMiDngrkgOTAwIOWGhgoNCi0tZml4dHVyZS1ib3VuZGFyeQ0KQ29udGVudC1UeXBlOiB0ZXh0L2h0bWw7IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDhiaXQNCg0KPHA-VU5UUlVTVEVEIEhUTUwgRFVQTElDQVRFPC9wPg0KLS1maXh0dXJlLWJvdW5kYXJ5LS0NCg",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "html-before-plain",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvYWx0ZXJuYXRpdmU7IGJvdW5kYXJ5PSJmaXh0dXJlLWJvdW5kYXJ5Ig0KDQotLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogdGV4dC9odG1sOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCjxwPlVOVFJVU1RFRCBIVE1MIERVUExJQ0FURTwvcD4NCi0tZml4dHVyZS1ib3VuZGFyeQ0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCuOAkOOBlOazqOaWh-eVquWPt-OAkSBGSVhUVVJFLU1JTUUtMDEK44CQ44GU5rOo5paH5ZWG5ZOB44CRCuODu-OAjOaetuepuuOCr-ODquODvOODiuODvCDoqbDmm78gMzUwbWzjgI0KIOWQiOioiCAyIOeCuSA5MDAg5YaGCg0KLS1maXh0dXJlLWJvdW5kYXJ5LS0NCg",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "html-only",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L2h0bWw7IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDhiaXQNCg0KPHA-VU5UUlVTVEVEIEhUTUwgRFVQTElDQVRFPC9wPg",
+      "expected": {
+        "status": "needs_review",
+        "code": "HTML_UNVERIFIED"
+      }
+    },
+    {
+      "id": "broken-utf8",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCv_-",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "unknown-charset",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXVua25vd24tZml4dHVyZS1jaGFyc2V0DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCmZpeHR1cmU",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "replacement-character",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCu-_vQ",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "broken-base64",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBiYXNlNjQNCg0KQEBpbnZhbGlkQEA",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "broken-quoted-printable",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiBxdW90ZWQtcHJpbnRhYmxlDQoNCmZpeHR1cmU9WFk",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "attachment-not-body",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvbWl4ZWQ7IGJvdW5kYXJ5PSJmaXh0dXJlLWJvdW5kYXJ5Ig0KDQotLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogOGJpdA0KDQrjgJDjgZTms6jmlofnlarlj7fjgJEgRklYVFVSRS1NSU1FLTAxCuOAkOOBlOazqOaWh-WVhuWTgeOAkQrjg7vjgIzmnrbnqbrjgq_jg6rjg7zjg4rjg7wg6Kmw5pu_IDM1MG1s44CNCiDlkIjoqIggMiDngrkgOTAwIOWGhgoNCi0tZml4dHVyZS1ib3VuZGFyeQ0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQpDb250ZW50LURpc3Bvc2l0aW9uOiBhdHRhY2htZW50OyBmaWxlbmFtZT0iZml4dHVyZS50eHQiDQoNCkFUVEFDSE1FTlQgTVVTVCBOT1QgQVBQRUFSDQotLWZpeHR1cmUtYm91bmRhcnktLQ0K",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "duplicate-plain",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvbWl4ZWQ7IGJvdW5kYXJ5PSJmaXh0dXJlLWJvdW5kYXJ5Ig0KDQotLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogOGJpdA0KDQrjgJDjgZTms6jmlofnlarlj7fjgJEgRklYVFVSRS1NSU1FLTAxCuOAkOOBlOazqOaWh-WVhuWTgeOAkQrjg7vjgIzmnrbnqbrjgq_jg6rjg7zjg4rjg7wg6Kmw5pu_IDM1MG1s44CNCiDlkIjoqIggMiDngrkgOTAwIOWGhgoNCi0tZml4dHVyZS1ib3VuZGFyeQ0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCuOAkOOBlOazqOaWh-eVquWPt-OAkSBGSVhUVVJFLU1JTUUtMDEK44CQ44GU5rOo5paH5ZWG5ZOB44CRCuODu-OAjOaetuepuuOCr-ODquODvOODiuODvCDoqbDmm78gMzUwbWzjgI0KIOWQiOioiCAyIOeCuSA5MDAg5YaGCg0KLS1maXh0dXJlLWJvdW5kYXJ5LS0NCg",
+      "expected": {
+        "status": "needs_review",
+        "code": "AMBIGUOUS_PLAIN_PARTS"
+      }
+    },
+    {
+      "id": "missing-boundary",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvbWl4ZWQ7IGJvdW5kYXJ5PSJtaXNzaW5nIg0KDQpmaXh0dXJl",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "empty-plain-with-html",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvYWx0ZXJuYXRpdmU7IGJvdW5kYXJ5PSJmaXh0dXJlLWJvdW5kYXJ5Ig0KDQotLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogOGJpdA0KDQoNCi0tZml4dHVyZS1ib3VuZGFyeQ0KQ29udGVudC1UeXBlOiB0ZXh0L2h0bWw7IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDhiaXQNCg0KPHA-VU5UUlVTVEVEIEhUTUwgRFVQTElDQVRFPC9wPg0KLS1maXh0dXJlLWJvdW5kYXJ5LS0NCg",
+      "expected": {
+        "status": "needs_review",
+        "code": "EMPTY_PLAIN_BODY"
+      }
+    },
+    {
+      "id": "unsupported-transfer",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiB1bmtub3duDQoNCmZpeHR1cmU",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "missing-charset-nonascii",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNCuOAkOOBlOazqOaWh-eVquWPt-OAkSBGSVhUVVJFLU1JTUUtMDEK44CQ44GU5rOo5paH5ZWG5ZOB44CRCuODu-OAjOaetuepuuOCr-ODquODvOODiuODvCDoqbDmm78gMzUwbWzjgI0KIOWQiOioiCAyIOeCuSA5MDAg5YaGCg",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "broken-iso2022",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PWlzby0yMDIyLWpwDQpDb250ZW50LVRyYW5zZmVyLUVuY29kaW5nOiA4Yml0DQoNChskQv8",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "nested-alternative",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtdWx0aXBhcnQvbWl4ZWQ7IGJvdW5kYXJ5PSJvdXRlci1maXh0dXJlLWJvdW5kYXJ5Ig0KDQotLW91dGVyLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogbXVsdGlwYXJ0L2FsdGVybmF0aXZlOyBib3VuZGFyeT0iZml4dHVyZS1ib3VuZGFyeSINCg0KLS1maXh0dXJlLWJvdW5kYXJ5DQpDb250ZW50LVR5cGU6IHRleHQvaHRtbDsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogOGJpdA0KDQo8cD5VTlRSVVNURUQgSFRNTCBEVVBMSUNBVEU8L3A-DQotLWZpeHR1cmUtYm91bmRhcnkNCkNvbnRlbnQtVHlwZTogdGV4dC9wbGFpbjsgY2hhcnNldD11dGYtOA0KQ29udGVudC1UcmFuc2Zlci1FbmNvZGluZzogOGJpdA0KDQrjgJDjgZTms6jmlofnlarlj7fjgJEgRklYVFVSRS1NSU1FLTAxCuOAkOOBlOazqOaWh-WVhuWTgeOAkQrjg7vjgIzmnrbnqbrjgq_jg6rjg7zjg4rjg7wg6Kmw5pu_IDM1MG1s44CNCiDlkIjoqIggMiDngrkgOTAwIOWGhgoNCi0tZml4dHVyZS1ib3VuZGFyeS0tDQoNCi0tb3V0ZXItZml4dHVyZS1ib3VuZGFyeS0tDQo",
+      "expected": {
+        "status": "decoded",
+        "bodyKind": "plain",
+        "text": "【ご注文番号】 FIXTURE-MIME-01\n【ご注文商品】\n・「架空クリーナー 詰替 350ml」\n 合計 2 点 900 円\n"
+      }
+    },
+    {
+      "id": "duplicate-content-type",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiB0ZXh0L3BsYWluOyBjaGFyc2V0PXV0Zi04DQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDhiaXQNCg0K44CQ44GU5rOo5paH55Wq5Y-344CRIEZJWFRVUkUtTUlNRS0wMQrjgJDjgZTms6jmlofllYblk4HjgJEK44O744CM5p6256m644Kv44Oq44O844OK44O8IOipsOabvyAzNTBtbOOAjQog5ZCI6KiIIDIg54K5IDkwMCDlhoYK",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    },
+    {
+      "id": "forwarded-message",
+      "raw": "RnJvbTogZml4dHVyZUBleGFtcGxlLmludmFsaWQNClRvOiBub2JvZHlAZXhhbXBsZS5pbnZhbGlkDQpNSU1FLVZlcnNpb246IDEuMA0KQ29udGVudC1UeXBlOiBtZXNzYWdlL3JmYzgyMg0KDQpDb250ZW50LVR5cGU6IHRleHQvcGxhaW47IGNoYXJzZXQ9dXRmLTgNCkNvbnRlbnQtVHJhbnNmZXItRW5jb2Rpbmc6IDhiaXQNCg0K44CQ44GU5rOo5paH55Wq5Y-344CRIEZJWFRVUkUtTUlNRS0wMQrjgJDjgZTms6jmlofllYblk4HjgJEK44O744CM5p6256m644Kv44Oq44O844OK44O8IOipsOabvyAzNTBtbOOAjQog5ZCI6KiIIDIg54K5IDkwMCDlhoYK",
+      "expected": {
+        "status": "needs_review",
+        "code": "FORWARDED_MESSAGE_UNVERIFIED"
+      }
+    },
+    {
+      "id": "invalid-gmail-base64url",
+      "raw": "@@fixture@@",
+      "expected": {
+        "status": "needs_review",
+        "code": "DECODE_ERROR"
+      }
+    }
+  ]
+}
