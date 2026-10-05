@@ -81,14 +81,19 @@ export function createReplenishmentOperations(db, now = () => new Date()) {
         const outcome = await db.runTransaction(async tx => {
           const [keySnap, candidates, lineSnap] = await Promise.all([tx.get(key), tx.get(user.collection('products').where('identifiers.merchantSku', '==', sku).limit(3)), tx.get(user.collection('purchaseLines').where('identifiers.merchantSku', '==', sku).limit(101))]);
           if (candidates.size > 1 || lineSnap.size > 100) return { review: true };
-          const ids = new Set(lineSnap.docs.map(d => d.data().productId).filter(Boolean));
-          const target = keySnap.exists ? keySnap.data().target : candidates.size ? { collection: 'products', id: candidates.docs[0].id } : null;
+          // Explicit assignments participate in identity resolution; explicit null does not.
+          const ids = new Set(lineSnap.docs.map(d => effective(d.data()).productId).filter(Boolean));
+          if (ids.size > 1) return { review: true };
+          const target = keySnap.exists ? keySnap.data().target : candidates.size ? { collection: 'products', id: candidates.docs[0].id } : ids.size ? { collection: 'products', id: [...ids][0] } : null;
           if (target && target.collection !== 'products') throw new AppError('CONFLICT', 'Product identity conflict', 409);
           if (ids.size && (!target || [...ids].some(x => x !== target.id))) return { review: true };
           const productRef = user.collection('products').doc(target ? id(target.id) : randomUUID());
           const productSnap = await tx.get(productRef);
           if (target && !productSnap.exists) return { review: true };
-          if (productSnap.exists && productSnap.data().identifiers?.merchantSku !== sku) return { review: true };
+          // A user-selected product may have no SKU metadata. Reserve the SKU to it
+          // without replacing its identifiers. An already different SKU is a conflict.
+          const productSku = productSnap.exists ? productSnap.data().identifiers?.merchantSku : null;
+          if (productSku && productSku !== sku) return { review: true };
           if (candidates.size && candidates.docs[0].id !== productRef.id) return { review: true };
           const pending = lineSnap.docs.filter(d => !d.data().productId && !Object.hasOwn(d.data().userOverrides ?? {}, 'productId') && typeof d.data().rawProductName === 'string');
           if (!pending.length && !productSnap.exists) return { matched: 0, created: false };
