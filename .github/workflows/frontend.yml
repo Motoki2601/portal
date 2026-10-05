@@ -27,4 +27,15 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx eslint src
+        if: ${{ hashFiles('src/collectionStorage.ts') != '' }}
       - run: node --test test/collection-operations.test.mjs
+        if: ${{ hashFiles('test/collection-operations.test.mjs') != '' }}
+      - uses: actions/setup-java@v4
+        if: ${{ hashFiles('test/collection-storage-emulator.test.mjs') != '' }}
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci --prefix server
+        if: ${{ hashFiles('test/collection-storage-emulator.test.mjs') != '' }}
+      - run: server/node_modules/.bin/firebase emulators:exec --config firebase.json --project demo-portal --only firestore 'node --test test/collection-storage-emulator.test.mjs'
+        if: ${{ hashFiles('test/collection-storage-emulator.test.mjs') != '' }}
