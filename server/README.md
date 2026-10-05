@@ -23,7 +23,7 @@
 
 共通エラーは `{code,message,retryable,requestId}`。401はtoken不正、403はユーザー/Origin対象外、400は入力不正、409はmutation ID再利用、503は認証基盤障害。本文・token・氏名等をログへ出さない。
 
-履歴はユーザー配下の注文/明細/商品を読み、userOverridesを適用してから購入日降順・注文ID降順・明細ID降順で返す。個人規模のためcollectionごと最大5,000件までのbounded scan。過大入力は413で拒否し、結果を黙って切り捨てない。新規/訂正がページ間に起きる場合のsnapshot固定は未提供。
+履歴はユーザー配下の注文/明細/商品をread-only transactionの同一snapshotで読み、userOverridesを適用してから購入日降順・注文ID降順・明細ID降順で返す。個人規模のためcollectionごと最大5,000件までのbounded scan。過大入力は413で拒否し、結果を黙って切り捨てない。新規/訂正がページ間に起きる場合のsnapshot固定は未提供。
 
 状態記録は次の型に限定する:
 
@@ -152,4 +152,5 @@ CSV保存後に`POST /purchase-history/match-products`へ空JSONを送る。商�
 `POST /tools/call` は `{name,arguments}` で許可済みread/推薦Toolを実行。Firebase認証済みUIDのみを使用し、モデルからuser補正権限を受け取らない。
 本人の明示操作は `POST /corrections`、`POST /product-usage`、推薦保存は `POST /recommendations`。すべてJSON。`/recommendations` と `/tools/call` は256KiB上限（UTF-8 bytes、envelope込み）、補正・使用商品切替・状態記録は8KiB上限。
 transport非依存の `createCommerceTools` と注入providerの `runCommerceConversation`、訂正・切替・推薦transactionを提供する。
+save_recommendation Toolの成功応答は `{recommendationId}` のみ。保存snapshotが大きくても書込み成功後に応答サイズ上限で失敗させない。直接 `POST /recommendations` は従来どおり完全な推薦snapshotを返し、同じmutation IDの再送は同じID/保存内容になる。
 実AI/検索providerと会話UIの接続は後続。詳細・入力フィールドは [conversation-tools.md](../docs/personal-commerce/conversation-tools.md)。

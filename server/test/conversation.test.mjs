@@ -10,7 +10,7 @@ const clock = () => new Date('2026-10-05T00:00:00Z');
 const products = [{ id: 'old', category: 'shampoo', replenishmentStatus: 'candidate', revision: 1 }, { id: 'new', category: 'shampoo', replenishmentStatus: 'candidate', revision: 1 }];
 const orders = [{ id: 'a', orderedOn: '2026-08-01', status: 'ordered', identityStatus: 'confirmed' }, { id: 'b', orderedOn: '2026-09-01', status: 'ordered', identityStatus: 'confirmed' }];
 const lines = [{ id: 'a', orderId: 'a', productId: 'old', status: 'ordered' }, { id: 'b', orderId: 'b', productId: 'new', status: 'ordered' }];
-const repo = { readConversationSnapshot: async () => ({ products, orders, lines, states: [] }), readHistory: async () => ({ products, orders, lines }), getReplenishment: async () => calculateReplenishment({ products, orders, lines, states: [] }, clock()), correctRecord: async (uid, input) => ({ uid, input }), recordUsage: async (uid, input) => ({ uid, input }), saveRecommendation: async (uid, input) => ({ uid, input }) };
+const repo = { readConversationSnapshot: async () => ({ products, orders, lines, states: [] }), readHistory: async () => ({ products, orders, lines }), getReplenishment: async () => calculateReplenishment({ products, orders, lines, states: [] }, clock()), correctRecord: async (uid, input) => ({ uid, input }), recordUsage: async (uid, input) => ({ uid, input }), saveRecommendation: async (uid, input) => ({ recommendationId: 'a'.repeat(64), uid, input }) };
 function app() { const a = createApplication(repo, clock); return Object.assign(a, createConversationApplication(a, repo, clock)); }
 const recommendation = { clientMutationId: 'rec', productId: 'new', contextFingerprint: 'a'.repeat(64), rationale: '確認時期のため', recommendedProduct: { name: '架空シャンプー' }, alternatives: [], currentPrice: null };
 test('current inference uses own purchase dates rather than category fallback', async () => {
@@ -85,7 +85,9 @@ test('HTTP accepts maximum recommendation fields directly and through tools, wit
     assert(Buffer.byteLength(body) < 256 * 1024);
     const response = await post(path, body);
     assert.equal(response.status, 200);
-    assert.equal((await response.json()).input.alternatives.length, 5);
+    const result = await response.json();
+    if (path === '/tools/call') assert.deepEqual(result, { recommendationId: 'a'.repeat(64) });
+    else assert.equal(result.input.alternatives.length, 5);
     const atLimit = body + ' '.repeat(256 * 1024 - Buffer.byteLength(body));
     assert.equal((await post(path, atLimit)).status, 200);
     assert.equal((await post(path, atLimit + ' ')).status, 413);
