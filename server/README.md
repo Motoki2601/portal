@@ -1,6 +1,6 @@
 # Personal Commerce API（#16 初期実装）
 
-既存Portalと別のNode.js API。Firebase ID tokenからuidを検証し、許可済みユーザーの購入履歴取得と粗い商品状態の記録だけを提供する。フレームワークやMCPは追加しない。
+既存Portalと別のNode.js API。Firebase ID tokenからuidを検証し、許可済みユーザーの購入履歴取込・取得、商品照合、補充候補算出、明示状態・訂正、AI会話Toolと推薦保存を提供する。フレームワークやMCPは追加しない。
 
 ## operation
 
@@ -14,6 +14,10 @@
 | POST /purchase-history/match-products | 必須 | body={}。強い商品SKUでProductを照合 |
 | GET /replenishment-candidates | 必須 | 当日の補充候補だけを返す |
 | GET /replenishment-estimates | 必須 | 対象外理由を含む全商品の算出結果 |
+| POST /tools/call | 必須 | 許可済みread/推薦Tool。ユーザー補正grantは受け付けない |
+| POST /corrections | 必須 | 許可fieldのoverride設定・解除。revision確認と監査 |
+| POST /product-usage | 必須 | 現在利用の登録・同カテゴリの原子的切替 |
+| POST /recommendations | 必須 | 文脈fingerprint一致を確認して推薦snapshot保存 |
 
 保護operationはFirebase Admin verifyIdToken(token,true)で署名/発行元/期限/失効・無効ユーザーを確認し、ALLOWED_UIDSで利用者を限定する。request bodyやqueryのuidは受け付けない。Originがある場合はPORTAL_ORIGINSの完全一致のみ許可（GitHub Pagesのoriginはパスを含まない）。CORSは認証の代わりではない。
 
@@ -36,11 +40,11 @@ valueはunknown/likely_available/running_low/spare_available/out_of_stock。obse
 
 Observation＋ProductState＋AuditLogを1 transactionで保存。同clientMutationId/同内容は元のresultを返し、異なる内容は409。productが同uidに存在しなければ404。履歴上の古い申告はログへ残すが新しい明示状態を上書きしない。stateRecordedAt、inputFingerprint、resultは最小実装の追加メタデータ。状態は7日後にも解除せず、likely_available/spare_availableの通知抑制期限のみ7日で保存する。
 
-状態記録レスポンスはestimateを含めない。記録後は候補/算出結果GETで最新の状態を含めて算出できる。usage/対象指定/release、購入訂正、Gmail取込の書込みoperationは後続。estimateの保存projectionはまだ使用しない。
+状態記録レスポンスはestimateを含めない。記録後は候補/算出結果GETで最新の状態を含めて算出できる。usage/対象指定/release、購入訂正は末尾のAI会話契約に対応。Gmail取込の書込みoperationは後続。estimateの保存projectionはまだ使用しない。
 
 ## ローカル検証（本番資格情報不要）
 
-Node.js 24、Java 21以上を用意する。
+Node.js 24、Java 21以上、Python 3.11以上を用意する。
 
 ```bash
 cd server
@@ -142,3 +146,10 @@ CSV保存後に`POST /purchase-history/match-products`へ空JSONを送る。商�
 候補/算出結果GETは4collection（注文・明細・商品・状態、各最大5,000件）を読み取りtransactionの同一snapshotで取得し、毎回最新のeffective値を計算する。結果はオンデマンドで返し、replenishmentEstimates collectionへキャッシュ保存しない。state申告・取消・訂正後も古い保存値を返さず再算出する。定期実行、推定projection保存、AI分類/名称/カテゴリ推定、カテゴリ指定/usage/releaseの書込みUIは後続。
 
 同日の購入を1機会へ集約し、平均・中央値、中央値を四捨五入した次回日、7日前の通知開始日を返す。数量で周期を割らない。商品履歴不足は既知カテゴリだけ補助し、カテゴリ不明は推定不可。excluded/not_current・7日抑制を優先し、過去の残あり状態は消さない。同カテゴリの別商品を後から購入している場合は、明示currentがない古い商品を候補から除く。明示out_of_stockの周期不足例外はcurrent指定された対象商品だけ。候補は在庫切れの断定ではない。
+
+## AI会話 / Tool境界 (#19)
+
+`POST /tools/call` は `{name,arguments}` で許可済みread/推薦Toolを実行。Firebase認証済みUIDのみを使用し、モデルからuser補正権限を受け取らない。
+本人の明示操作は `POST /corrections`、`POST /product-usage`、推薦保存は `POST /recommendations`。すべてJSON。`/recommendations` と `/tools/call` は256KiB上限（UTF-8 bytes、envelope込み）、補正・使用商品切替・状態記録は8KiB上限。
+transport非依存の `createCommerceTools` と注入providerの `runCommerceConversation`、訂正・切替・推薦transactionを提供する。
+実AI/検索providerと会話UIの接続は後続。詳細・入力フィールドは [conversation-tools.md](../docs/personal-commerce/conversation-tools.md)。

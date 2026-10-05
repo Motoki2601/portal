@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { AppError, invalid } from './application.mjs';
+import { createCommerceTools } from './tools.mjs';
 import { serialize } from './firestore.mjs';
 
 export function createApi({ application, verifyToken, allowedOrigins, allowedUids, log = () => {} }) {
@@ -42,18 +43,25 @@ export function createApi({ application, verifyToken, allowedOrigins, allowedUid
       if (req.method === 'GET' && ['/replenishment-candidates', '/replenishment-estimates'].includes(url.pathname)) {
         send(200, await application.getReplenishment(uid, Object.fromEntries(url.searchParams), url.pathname === '/replenishment-estimates')); return;
       }
-      if (req.method === 'POST' && ['/user-observations', '/imports/amazon-csv', '/purchase-history/match-products'].includes(url.pathname)) {
+      if (req.method === 'POST' && ['/user-observations', '/imports/amazon-csv', '/purchase-history/match-products', '/corrections', '/product-usage', '/recommendations', '/tools/call'].includes(url.pathname)) {
         if (url.search) throw invalid('Query parameters are not accepted');
         if (req.headers['content-type']?.split(';')[0].trim() !== 'application/json') throw invalid('Content-Type must be application/json');
         const chunks = await new Promise((resolve, reject) => {
-          const maxBytes = url.pathname === '/imports/amazon-csv' ? 256 * 1024 : 8192;
+          // Recommendations allow five researched alternatives and long URLs/text.
+          // The tool envelope must accept the same payload as the direct route.
+          const maxBytes = ['/imports/amazon-csv', '/recommendations', '/tools/call'].includes(url.pathname) ? 256 * 1024 : 8192;
           let size = 0; const parts = [];
           req.on('data', chunk => { size += chunk.length; if (size <= maxBytes) parts.push(chunk); });
           req.on('end', () => size > maxBytes ? reject(new AppError('INVALID_ARGUMENT', 'Body too large', 413)) : resolve(parts));
           req.on('error', reject);
         });
         let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw invalid('Invalid JSON'); }
-        send(200, url.pathname === '/imports/amazon-csv' ? await application.importAmazonCsv(uid, body, requestId) : url.pathname === '/purchase-history/match-products' ? await application.matchProducts(uid, body, requestId) : await application.recordState(uid, body, requestId)); return;
+        if (url.pathname === '/tools/call') {
+          if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(k => !['name', 'arguments'].includes(k))) throw invalid('Invalid tool call');
+          send(200, await createCommerceTools({ application, uid, requestId }).execute(body.name, body.arguments)); return;
+        }
+        const operation = { '/imports/amazon-csv': 'importAmazonCsv', '/purchase-history/match-products': 'matchProducts', '/user-observations': 'recordState', '/corrections': 'correctRecord', '/product-usage': 'recordUsage', '/recommendations': 'saveRecommendation' }[url.pathname];
+        send(200, await application[operation](uid, body, requestId)); return;
       }
       throw new AppError('NOT_FOUND', 'Operation not found', 404);
     } catch (error) {
