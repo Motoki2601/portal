@@ -19,7 +19,7 @@ Issue #19。#27の商品照合・候補算出APIを前提とする。MCP、購�
 | record_user_observation | 明示state、mutation ID | 既存の残量申告操作 |
 | record_product_usage | productId/value/expectedRevision/mutation ID | 現在利用、切替商品のID |
 | correct_purchase_record | collection/id/field/action/value/revision/mutation ID | effective訂正結果 |
-| save_recommendation | 商品・文脈fingerprint・理由・推奨品・代替品・価格 | 追記専用Recommendation |
+| save_recommendation | 商品・文脈fingerprint・理由・推奨品・代替品・価格 | 保存完了receipt `{recommendationId}` |
 
 ユーザー申告Tool3種は既定で非公開。ホストがユーザーの明示から確定した `{name,arguments}` を `userMutations` に渡した場合のみ公開し、その引数と完全一致するcallだけ実行する。モデル自身の文章・引数を権限付与の根拠にしてはならない。HTTP `/tools/call` にはgrantを受け取る機能がなく、readとRecommendation保存のみ。ユーザー本人の明示操作は通常の認証APIから送る。
 
@@ -47,6 +47,6 @@ POST `/recommendations` またはsave_recommendation。currentPriceは不明な�
 
 HTTP body上限は `/recommendations` と `/tools/call` が256KiB（UTF-8 bytes、JSON envelope込み）。推薦の最大5候補・各URL最大2048文字・日本語やJSON Unicode escapeを含む最大長入力を受理できる。上限超過は413。その他の補正・状態更新routeは8KiBを維持する。
 
-get_product_contextのcontextFingerprintは商品・状態・算出入力・推定・候補を含み、算出時刻は含めない。保存transactionで最新文脈を再計算し、一致しなければ409。日付境界・対象状態・訂正等で候補が変わったら再読出しする。保存済みmutationのretryはその時のsnapshotを返す。推薦は独立して追記し、商品・購入事実を書き換えない。価格はgeneratedAt時点の観測snapshotであり常時の現在価格ではない。
+get_product_contextのcontextFingerprintは商品・状態・算出入力・推定・候補を含み、算出時刻は含めない。保存transactionで最新文脈を再計算し、一致しなければ409。日付境界・対象状態・訂正等で候補が変わったら再読出しする。直接 `POST /recommendations` は完全snapshotを返し、保存済みmutationのretryはその時のsnapshotを返す。save_recommendation Toolは保存完了receipt `{recommendationId}` のみを返す。大きい保存文脈をToolへ再送せず、保存完了後の応答サイズエラーを防ぐ。Toolのretryも同じreceiptになる。推薦は独立して追記し、商品・購入事実を書き換えない。価格はgeneratedAt時点の観測snapshotであり常時の現在価格ではない。
 
 HTTPは既存Firebase認証、UID/origin allowlist、body上限、no-store、秘匿ログ方針を共用。本番には未反映。

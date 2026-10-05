@@ -13,7 +13,7 @@ const definitions = [
   ['record_user_observation', 'ユーザーが明示した残量状態のみ登録。AIの推定をユーザー申告にしない。', schema({ clientMutationId: str, productId: str, kind: { const: 'state' }, value: { enum: ['unknown', 'likely_available', 'running_low', 'spare_available', 'out_of_stock'] }, observedAt: str, note: str }, ['clientMutationId', 'productId', 'kind', 'value']), 'recordState', true],
   ['record_product_usage', '明示した現在利用を登録。同カテゴリの前currentを原子的にnot_currentへ。unknownカテゴリは自動切替しない。', schema({ clientMutationId: str, productId: str, value: { enum: ['unknown', 'current', 'not_current'] }, expectedRevision: integer }, ['clientMutationId', 'productId', 'value', 'expectedRevision']), 'recordUsage', true],
   ['correct_purchase_record', 'ユーザー明示訂正をoverrideに保存。releaseで指定フィールドの固定を解除。最新revisionが必須。', schema({ clientMutationId: str, collection: { enum: ['purchaseOrders', 'purchaseLines', 'products'] }, id: str, field: str, value: {}, action: { enum: ['set', 'release'] }, expectedRevision: integer }, ['clientMutationId', 'collection', 'id', 'field', 'action', 'expectedRevision']), 'correctRecord', true],
-  ['save_recommendation', '外部調査結果を独立snapshotで保存。価格不明はnull。価格の根拠HTTPS URL・観測UTC時刻が必須。履歴事実を書き換えない。', schema({ clientMutationId: str, productId: str, contextFingerprint: str, rationale: str, recommendedProduct: schema({ name: str, url: str }, ['name']), alternatives: { type: 'array', maxItems: 5, items: schema({ name: str, url: str, rationale: str, currentPrice: price }, ['name', 'url', 'rationale', 'currentPrice']) }, currentPrice: price, aiModel: str }, ['clientMutationId', 'productId', 'contextFingerprint', 'rationale', 'recommendedProduct', 'alternatives', 'currentPrice']), 'saveRecommendation'],
+  ['save_recommendation', '外部調査結果を独立snapshotで保存。価格不明はnull。価格の根拠HTTPS URL・観測UTC時刻が必須。履歴事実を書き換えない。保存後はrecommendationIdだけを返す。', schema({ clientMutationId: str, productId: str, contextFingerprint: str, rationale: str, recommendedProduct: schema({ name: str, url: str }, ['name']), alternatives: { type: 'array', maxItems: 5, items: schema({ name: str, url: str, rationale: str, currentPrice: price }, ['name', 'url', 'rationale', 'currentPrice']) }, currentPrice: price, aiModel: str }, ['clientMutationId', 'productId', 'contextFingerprint', 'rationale', 'recommendedProduct', 'alternatives', 'currentPrice']), 'saveRecommendation'],
 ];
 function accepts(spec, value) {
   if (spec.anyOf) return spec.anyOf.some(s => accepts(s, value));
@@ -37,6 +37,9 @@ export function createCommerceTools({ application, uid, requestId, userMutations
       if (!operation) throw new AppError('FORBIDDEN', 'Tool is not granted', 403);
       if (!accepts(operation[2], args)) throw invalid('Invalid tool arguments');
       const result = serialize(await application[operation[3]](uid, args, operation[3] === 'getReplenishment' ? false : requestId));
+      // The snapshot is stored atomically and can be larger than a tool response.
+      // A completed write must return its stable receipt, including on retries.
+      if (operation[3] === 'saveRecommendation') return { recommendationId: result.recommendationId };
       if (JSON.stringify(result).length > 256 * 1024) throw new AppError('RESOURCE_EXHAUSTED', 'Tool response too large; narrow the query', 413);
       return result;
     },
