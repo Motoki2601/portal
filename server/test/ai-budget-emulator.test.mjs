@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { createAiBudgetGate } from '../ai-budget.mjs';
+import { createBudgetedProvider } from '../budgeted-provider.mjs';
 test('atomic cap, dispatch once, unknown hold, rollover, cancellation and overrun stop', async t => {
   assert(process.env.FIRESTORE_EMULATOR_HOST);
   const app = initializeApp({ projectId: 'demo-portal' }, 'budget-test'); t.after(() => deleteApp(app));
@@ -42,4 +43,30 @@ test('atomic cap, dispatch once, unknown hold, rollover, cancellation and overru
   await rollover.cancel('old-reserved');
   assert.equal((await rollover.reserve(input('current-reserved'))).allowed, true);
   assert.equal(await rollover.claimDispatch('current-reserved'), true);
+});
+
+test('budgeted provider blocks parallel paid calls and retains unknown cost on Firestore', async t => {
+  assert(process.env.FIRESTORE_EMULATOR_HOST);
+  const app = initializeApp({ projectId: 'demo-portal' }, 'budget-provider-test'); t.after(() => deleteApp(app));
+  const gate = createAiBudgetGate(getFirestore(app), { scope: `provider-${Date.now()}`, clock: () => new Date('2026-10-05T00:00:00Z'), limitMicros: 100 });
+  const cost = { kind: 'ai', model: 'gemini-3.5-flash-lite', upperBoundJpyMicro: 60, pricingVersion: 'anonymous-fixture', hardBoundVerified: true };
+  let started, finish, calls = 0;
+  const dispatchStarted = new Promise(resolve => { started = resolve; });
+  const hold = new Promise(resolve => { finish = resolve; });
+  const call = createBudgetedProvider({ gate, prepare: async input => ({ request: input, cost }), dispatch: async () => {
+    calls++; started(); await hold; throw new Error('anonymous timeout');
+  } });
+  const first = call({ question: '匿名質問' }, { operationId: 'first' });
+  try {
+    await dispatchStarted;
+    assert.equal((await call({ question: '別の質問' }, { operationId: 'second' })).code, 'MONTHLY_BUDGET_EXHAUSTED');
+    assert.equal((await call({ question: '匿名質問' }, { operationId: 'first' })).code, 'OPERATION_NOT_RESERVABLE');
+    assert.equal((await call({ question: '変更された質問' }, { operationId: 'first' })).code, 'BUDGET_LEDGER_UNAVAILABLE');
+  } finally { finish(); }
+  assert.equal((await first).code, 'PROVIDER_RESULT_UNKNOWN');
+  const replay = await call({ question: '匿名質問' }, { operationId: 'first' });
+  assert.equal(replay.state, 'unknown');
+  assert.equal(replay.fallback.history, true);
+  assert.equal(calls, 1);
+  await assert.rejects(gate.cancel('first'));
 });

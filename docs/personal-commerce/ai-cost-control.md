@@ -2,7 +2,7 @@
 
 ## 範囲と残作業
 
-非本番の台帳・設定検証を提供する。provider接続、Secret取得、取込保留、価格なし通知の本体は後続Issue。本番のSecret/IAM/課金設定を変更しない。#17のBilling/Budgetは再実装しない。2026-10-05に#17記録を確認、実環境確認は資格情報待ち。Budget Alertは通知であり支出上限ではない。
+非本番の台帳・設定検証と共通provider呼出境界を提供する。実Gemini/検索adapter接続、Secret取得、取込保留、価格なし通知の本体は未完了。本番のSecret/IAM/課金設定を変更しない。#17のBilling/Budgetは再実装しない。2026-10-05に#17記録を確認。ロードマップ#9にはその後の実Billing/Budget確認・紐付け完了記録がある。Budget Alertは通知であり支出上限ではない。
 
 ## 共有interface
 
@@ -16,6 +16,19 @@
 同じoperationIdの変更入力はconflict。月を跨いだdispatched/unknownの再開も元の月へ確定し再発行しない。旧月の未発行reservedはclaimを拒否する。旧予約をcancelし、新IDで新月へ予約してから発行する。未確定予約をTTLで消さない。設定上限は700円超を拒否する。外部callの課金月はprovider側の記録と照合が必要であり、月境界をまたぐ既発行callの実請求日を本台帳だけで保証しない。
 
 拒否は`{allowed:false,code,fallback:{deferImports:true,history:true,replenishment:true,notificationPrice:false}}`。後続担当はこの決定情報を受けて取込保留、履歴・周期継続、価格なし通知を実装・検証する。現在この機能の統合は未実装。
+
+## 共通provider呼出境界（2026-10-06）
+
+`createBudgetedProvider({gate,prepare,dispatch})` → `call(input,{operationId,signal})`。#32の共通境界であり、実Gemini/検索adapter・HTTP route・runtimeには未接続。偽providerで既存会話loopへの接続を検証する。
+
+- `prepare`は信頼するサーバー側adapter。送信前の個人情報除去、request全体の料金上限検証を行い、`{request,cost:{kind,model,upperBoundJpyMicro,pricingVersion,hardBoundVerified}}`を返す。値をユーザー/モデルからコピーしない。未確認上限はgateが拒否する。実料金/最大token/検索query数保証はまだ実装されていない。
+- JSON requestを複製・正規化しSHA-256 fingerprintで予約に束縛する。同一operationIdに異なるrequestを使うと拒否。同じJSONのキー順変更は同一とする。任意のSDK object/credentialをrequestへ含めない。直接gateを使う既存呼出しは互換性のためfingerprint省略可能だが、新規外部callは本wrapperを使う。
+- `dispatch(request,{signal})`は信頼するadapter。SDK/transportの自動retryと隠れた追加callを無効にする。単一の予約で複数の有料callを発行しない。provider使用量と検証済み換算根拠から`{value,actualJpyMicro}`を返し、生成文章を費用に使わない。無料扱いは確定使用量が0円のときのみ。
+- 上限未検証、台帳不可、claim不可では送信なし。送信前abortは未発行予約をcancelできる。claim後のabort/timeout/不正費用/精算障害は保守的にunknownとして保持し自動再送なし。unknown書込も失敗した場合はdispatched状態のholdが残る。
+- 成功は`{allowed:true,value}`、停止/不明は`{allowed:false,code,fallback}`。codeのみ返しprovider例外やrequest本文をログ・レスポンスへ出さない。既存予約拒否はreservationId/state/replayも保持する。予約入力競合を含む台帳例外は現段階でBUDGET_LEDGER_UNAVAILABLEへ集約する。非AI機能の継続情報は返すが、その機能自体の統合は未完了。
+- 超過実額を精算したらCOST_OVERRUNを返し将来callを停止する。取消が送信中に起きても実額判明時は記録してからCALL_CANCELLEDを返す。claim後のプロセス終了はwrapperが回復できず、dispatched holdを運用確認する。
+
+単体は既存会話2往復、予算停止、request変更、台帳障害、timeout、usage欠落、精算/unknown保存障害、abort、超過を検証。Firestore Emulatorでは送信中の別operation/同一operationを拒否しunknown holdを維持する。実サービス/実課金/実IAMの証跡ではない。
 
 ## Secret・料金運用
 

@@ -17,11 +17,12 @@ export function createAiBudgetGate(db, { scope = 'personal-commerce', clock = ()
   const reservation = id => root.collection('reservations').doc(key(id));
   return {
     async reserve(input) {
-      const { operationId, kind, model, upperBoundJpyMicro, pricingVersion, hardBoundVerified } = input;
+      const { operationId, kind, model, upperBoundJpyMicro, pricingVersion, hardBoundVerified, requestFingerprint } = input;
       const ref = reservation(operationId);
       money(upperBoundJpyMicro);
       if (hardBoundVerified !== true || typeof pricingVersion !== 'string' || !pricingVersion.trim() || model !== 'gemini-3.5-flash-lite' || !['ai', 'search'].includes(kind) || upperBoundJpyMicro === 0) return deny('UNVERIFIED_COST_BOUND');
-      const fingerprint = JSON.stringify([kind, model, upperBoundJpyMicro, pricingVersion]);
+      if (requestFingerprint !== undefined && (typeof requestFingerprint !== 'string' || !/^[a-f0-9]{64}$/.test(requestFingerprint))) throw new Error('Invalid request fingerprint');
+      const fingerprint = JSON.stringify(requestFingerprint === undefined ? [kind, model, upperBoundJpyMicro, pricingVersion] : [kind, model, upperBoundJpyMicro, pricingVersion, requestFingerprint]);
       const month = monthKey(clock()), ledgerRef = root.collection('months').doc(month);
       return db.runTransaction(async tx => {
         const old = await tx.get(ref);
