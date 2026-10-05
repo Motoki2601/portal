@@ -1,12 +1,14 @@
-name: Amazon CSV normalizer tests
+name: Personal Commerce Python tests
 on:
   pull_request:
     paths:
       - 'scripts/personal_commerce/**'
+      - 'docs/personal-commerce/fixtures/gmail-mime-v1.json'
       - '.github/workflows/amazon-csv-tests.yml'
   push:
     paths:
       - 'scripts/personal_commerce/**'
+      - 'docs/personal-commerce/fixtures/gmail-mime-v1.json'
       - '.github/workflows/amazon-csv-tests.yml'
 permissions:
   contents: read
