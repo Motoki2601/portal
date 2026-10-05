@@ -110,3 +110,9 @@ Issueは「目的、INPUT、Process、Output、受入条件、検証、依存関
 - #9から本書/全マイルストーン/全作業Issueへ、本書と各Issueから#9へ辿れる。
 - #16/#19は実装済みと未完了を分離。既存完了Issue・Backlog・#2の状態を維持。
 - 日本語文字列をUTF-8で保存し、GitHubから読み戻して一致を確認。
+
+## GCPプロジェクト方針（ユーザー確定）
+- 既存project ID `wishlist-app-dcd2e` をPersonal Commerceを含むPortal本番環境として再利用する。新規project作成・既存認証/データの移行は行わない。
+- ユーザー承認に基づき、表示名を `wishlist-app` → `Personal Portal Prod` に変更し、ACTIVE状態とIDが変わらないことを読み戻し確認済み。
+- 不要なAPIの整理は後日。今回APIの無効化は行わない。
+- 課金アカウントの既存Budget/紐付けを次に確認する。課金紐付け、必要API有効化、IAM、Rules、deployは各具体的差分・検証・承認後に実行。
