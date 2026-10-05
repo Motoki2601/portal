@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { X, Plus } from 'lucide-react';
 import type { RecipeItem } from '../types';
 
 interface Props {
   item?: RecipeItem | null;
-  onSave: (data: Omit<RecipeItem, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onSave: (data: Omit<RecipeItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -27,26 +27,15 @@ const RANK_IDLE_COLORS = [
 ];
 
 export default function RecipeModal({ item, onSave, onClose }: Props) {
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
+  const [name, setName] = useState(item?.name ?? '');
+  const [url, setUrl] = useState(item?.url ?? '');
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
-  const [rank, setRank] = useState(3);
-  const [ingredients, setIngredients] = useState('');
-  const [memo, setMemo] = useState('');
-  const [cooked, setCooked] = useState(false);
+  const [tags, setTags] = useState<string[]>(item?.tags ?? []);
+  const [rank, setRank] = useState(item?.rank ?? 3);
+  const [ingredients, setIngredients] = useState(item?.ingredients ?? '');
+  const [memo, setMemo] = useState(item?.memo ?? '');
+  const [cooked, setCooked] = useState(item?.cooked ?? false);
 
-  useEffect(() => {
-    if (item) {
-      setName(item.name);
-      setUrl(item.url);
-      setTags(item.tags);
-      setRank(item.rank);
-      setIngredients(item.ingredients);
-      setMemo(item.memo);
-      setCooked(item.cooked);
-    }
-  }, [item]);
 
   const addTag = () => {
     const t = tagInput.trim();
@@ -56,10 +45,14 @@ export default function RecipeModal({ item, onSave, onClose }: Props) {
 
   const removeTag = (t: string) => setTags(tags.filter(x => x !== t));
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [saving, setSaving] = useState(false);
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     if (!name.trim()) return;
-    onSave({
+    setSaving(true);
+    try {
+      await onSave({
       name: name.trim(),
       url: url.trim(),
       tags,
@@ -67,20 +60,23 @@ export default function RecipeModal({ item, onSave, onClose }: Props) {
       ingredients: ingredients.trim(),
       memo: memo.trim(),
       cooked,
-    });
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50"
-      onClick={e => e.target === e.currentTarget && onClose()}
+      onClick={e => !saving && e.target === e.currentTarget && onClose()}
     >
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
           <h2 className="text-lg font-semibold text-indigo-900">
             {item ? '料理を編集' : '料理を追加'}
           </h2>
-          <button onClick={onClose} className="p-1 rounded-full hover:bg-gray-100" aria-label="閉じる">
+          <button onClick={onClose} disabled={saving} className="p-1 rounded-full hover:bg-gray-100" aria-label="閉じる">
             <X size={20} />
           </button>
         </div>
@@ -227,13 +223,14 @@ export default function RecipeModal({ item, onSave, onClose }: Props) {
           <div className="flex gap-3 pt-2">
             <button
               type="button"
-              onClick={onClose}
+              onClick={onClose} disabled={saving}
               className="flex-1 py-2.5 border rounded-xl text-sm text-gray-600 hover:bg-gray-50"
             >
               キャンセル
             </button>
             <button
               type="submit"
+              disabled={saving}
               className="flex-1 py-2.5 bg-indigo-700 text-white rounded-xl text-sm font-medium hover:bg-indigo-800"
             >
               {item ? '保存' : '追加'}

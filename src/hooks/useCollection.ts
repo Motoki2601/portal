@@ -1,22 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { canMutateCollection, type BaseItem, type CollectionOperation, type CollectionSnapshot } from '../collectionOperations';
 
-interface BaseItem {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-const nextId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const nextId = () => crypto.randomUUID();
 
 export function useCollection<T extends BaseItem>(
   uid: string,
-  subscribe: (uid: string, onChange: (items: T[]) => void) => () => void,
-  save: (uid: string, items: T[]) => Promise<void>,
+  subscribe: (uid: string, onChange: (snapshot: CollectionSnapshot<T>) => void, onError: () => void) => () => void,
+  save: (uid: string, operation: CollectionOperation<T>) => Promise<void>,
 ) {
-  const [items, setItems] = useState<T[]>([]);
+  const [snapshot, setSnapshot] = useState({ uid, items: [] as T[], ready: false, error: false });
+  const session = useRef({ uid, ready: false, error: false });
   const [saveError, setSaveError] = useState(false);
 
-  useEffect(() => subscribe(uid, setItems), [uid, subscribe]);
+  useEffect(() => {
+    let active = true;
+    session.current = { uid, ready: false, error: false };
+    const unsubscribe = subscribe(uid, next => {
+      if (!active) return;
+      session.current = { uid, ready: next.ready, error: false };
+      setSnapshot({ uid, ...next, error: false });
+    }, () => {
+      if (!active) return;
+      session.current = { uid, ready: false, error: true };
+      setSnapshot(previous => ({ ...previous, uid, ready: false, error: true }));
+    });
+    return () => { active = false; session.current.ready = false; unsubscribe(); };
+  }, [uid, subscribe]);
 
   useEffect(() => {
     if (!saveError) return;
@@ -24,31 +33,39 @@ export function useCollection<T extends BaseItem>(
     return () => clearTimeout(timer);
   }, [saveError]);
 
-  const persist = (next: T[]) => {
-    setItems(next);
-    save(uid, next)
-      .then(() => setSaveError(false))
-      .catch(() => setSaveError(true));
+  const items = snapshot.uid === uid ? snapshot.items : [];
+  const persist = async (operation: CollectionOperation<T>): Promise<boolean> => {
+    if (!canMutateCollection(session.current, uid)) {
+      setSaveError(true);
+      return false;
+    }
+    try {
+      await save(uid, operation);
+      setSaveError(false);
+      return true;
+    } catch {
+      setSaveError(true);
+      return false;
+    }
   };
 
   const upsert = (data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>, editItem: T | null) => {
     const now = new Date().toISOString();
-    const next = editItem
-      ? items.map(i => (i.id === editItem.id ? ({ ...i, ...data, updatedAt: now } as T) : i))
-      : [...items, ({ ...data, id: nextId(), createdAt: now, updatedAt: now } as T)];
-    persist(next);
+    return persist(editItem
+      ? { kind: 'edit', id: editItem.id, expectedUpdatedAt: editItem.updatedAt, data, updatedAt: now }
+      : { kind: 'add', item: { ...data, id: nextId(), createdAt: now, updatedAt: now } as T });
   };
-
   const remove = (id: string) => {
-    if (confirm('削除しますか？')) {
-      persist(items.filter(i => i.id !== id));
+    const item = items.find(i => i.id === id);
+    if (item && confirm('削除しますか？')) {
+      void persist({ kind: 'remove', id, expectedUpdatedAt: item.updatedAt });
     }
   };
-
-  const update = (id: string, patch: Partial<T>) => {
-    const now = new Date().toISOString();
-    persist(items.map(i => (i.id === id ? { ...i, ...patch, updatedAt: now } : i)));
+  const update = (id: string, patch: Partial<Omit<T, 'id' | 'createdAt' | 'updatedAt'>>) => {
+    void persist({ kind: 'update', id, patch, updatedAt: new Date().toISOString() });
   };
 
-  return { items, persist, upsert, remove, update, saveError };
+  return { items, upsert, remove, update, saveError,
+    ready: snapshot.uid === uid && snapshot.ready && !snapshot.error,
+    loadError: snapshot.uid === uid && snapshot.error };
 }

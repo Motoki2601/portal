@@ -14,7 +14,7 @@ interface Props {
 }
 
 export default function WishlistPage({ user, onBack }: Props) {
-  const { items, upsert, remove, update, saveError } = useCollection<WishItem>(user.uid, subscribeItems, saveItems);
+  const { items, upsert, remove, update, saveError, ready, loadError } = useCollection<WishItem>(user.uid, subscribeItems, saveItems);
   const [editItem, setEditItem] = useState<WishItem | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
@@ -39,9 +39,10 @@ export default function WishlistPage({ user, onBack }: Props) {
   const openEdit = (item: WishItem) => { setEditItem(item); setShowModal(true); };
   const closeModal = () => { setShowModal(false); setEditItem(null); };
 
-  const handleSave = (data: Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'>) => {
-    upsert(data, editItem);
-    closeModal();
+  const handleSave = async (data: Omit<WishItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const saved = await upsert(data, editItem);
+    if (saved) closeModal();
+    return saved;
   };
 
   const handleTogglePurchased = (id: string) => {
@@ -62,6 +63,8 @@ export default function WishlistPage({ user, onBack }: Props) {
       totalCount={items.length}
       onAdd={openAdd}
       saveError={saveError}
+      ready={ready}
+      loadError={loadError}
       filterBar={
         <FilterBar
           tags={tags}
@@ -77,7 +80,7 @@ export default function WishlistPage({ user, onBack }: Props) {
         <span className="text-indigo-700 ml-2">¥{totalPrice.toLocaleString()}</span>
       )}
       modal={showModal && (
-        <ItemModal item={editItem} onSave={handleSave} onClose={closeModal} />
+        <ItemModal key={editItem?.id ?? 'new'} item={editItem} onSave={handleSave} onClose={closeModal} />
       )}
     >
       <div className="space-y-3">
