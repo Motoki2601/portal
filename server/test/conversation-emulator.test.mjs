@@ -33,7 +33,7 @@ test('anonymous history -> candidates -> research recommendation, corrections, s
       saved = { clientMutationId: 'recommendation-a', productId: 'shampoo-a', contextFingerprint: context.contextFingerprint, rationale: '周期上の確認時期です。在庫は不明です。', recommendedProduct: { name: '架空シャンプー', url: 'https://example.invalid/shampoo-a' }, currentPrice: { amountMinor: 900, currency: 'JPY', sourceUrl: 'https://example.invalid/shampoo-a', observedAt: '2026-10-04T12:00:00.000Z' }, alternatives: [{ name: '架空代替品', url: 'https://example.invalid/shampoo-b', rationale: '代替候補。適合はユーザー確認が必要。', currentPrice: null }], aiModel: 'fixture-provider' };
       return { toolCalls: [{ id: 'save', name: 'save_recommendation', arguments: saved }] };
     }
-    assert.equal(messages.at(-1).result.recommendation.currentPrice.amountMinor, 900);
+    assert.match(messages.at(-1).result.recommendationId, /^[a-f0-9]{64}$/);
     return { text: 'シャンプーが確認時期です。架空調査価格は900円、代替品の価格は不明です。' };
   } });
   assert.equal(reply.toolCallCount, 4);
@@ -79,4 +79,45 @@ test('anonymous history -> candidates -> research recommendation, corrections, s
   await assert.rejects(app.getProductContext('unrelated-user', { productId: 'shampoo-a' }), e => e.code === 'NOT_FOUND');
   await assert.rejects(app.correctRecord('unrelated-user', { ...correction, clientMutationId: 'other-fix' }, 'req'), e => e.code === 'NOT_FOUND');
   await assert.rejects(repo.readConversationSnapshot('../other'), e => e.code === 'FORBIDDEN');
+});
+
+test('recommendation tool acknowledges a committed maximum-size history snapshot and retries', async t => {
+  assert(process.env.FIRESTORE_EMULATOR_HOST);
+  const firebase = initializeApp({ projectId: 'demo-portal' }, 'recommendation-large-context');
+  t.after(() => deleteApp(firebase));
+  const db = getFirestore(firebase), uid = 'large-recommendation-owner';
+  const user = db.collection('users').doc(uid);
+  const repo = Object.assign(createFirestoreRepository(db), createReplenishmentOperations(db, clock), createConversationRepository(db, clock));
+  const app = createApplication(repo, clock);
+  Object.assign(app, createConversationApplication(app, repo, clock));
+  await user.collection('products').doc('product').set({ canonicalName: 'Fixture', category: 'unknown', replenishmentStatus: 'candidate', revision: 1 });
+  await user.collection('purchaseOrders').doc('order').set({ orderedOn: '2026-09-01', identityStatus: 'confirmed', status: 'ordered', revision: 1 });
+  // 5000 is the supported collection maximum; all IDs obey the 128-char ID
+  // validator. No oversized request or unsupported document shape is needed.
+  for (let start = 0; start < 5000; start += 500) {
+    const batch = db.batch();
+    for (let i = start; i < start + 500; i++) {
+      const lineId = String(i).padStart(64, '0');
+      batch.set(user.collection('purchaseLines').doc(lineId), { orderId: 'order', productId: 'product', status: 'ordered', revision: 1 });
+    }
+    await batch.commit();
+  }
+  const context = await app.getProductContext(uid, { productId: 'product' });
+  assert.equal(context.calculation.inputLineIds.length, 5000);
+  assert(JSON.stringify(context).length > 256 * 1024);
+  const input = { clientMutationId: 'large-snapshot', productId: 'product', contextFingerprint: context.contextFingerprint, rationale: 'Fixture research', recommendedProduct: { name: 'Fixture' }, alternatives: [], currentPrice: null };
+  const tools = createCommerceTools({ application: app, uid, requestId: 'large-context' });
+  const receipt = await tools.execute('save_recommendation', input);
+  assert.deepEqual(Object.keys(receipt), ['recommendationId']);
+  const stored = await user.collection('recommendations').doc(receipt.recommendationId).get();
+  assert(stored.exists);
+  assert.equal(stored.data().context.calculation.inputLineIds.length, 5000);
+  assert.deepEqual(await tools.execute('save_recommendation', input), receipt);
+  assert.equal((await user.collection('recommendations').get()).size, 1);
+  const audits = (await user.collection('auditLogs').get()).docs;
+  assert.equal(audits.filter(d => d.data().target.collection === 'recommendations').length, 1);
+  // Direct API callers retain the complete original snapshot contract.
+  const direct = await app.saveRecommendation(uid, input, 'direct-retry');
+  assert.equal(direct.recommendationId, receipt.recommendationId);
+  assert(JSON.stringify(direct).length > 256 * 1024);
 });
