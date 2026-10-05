@@ -36,6 +36,7 @@ test('model cannot self-grant user mutations or arbitrary database access', asyn
   const tools = createCommerceTools({ application: app(), uid: 'owner', requestId: 'req' });
   for (const name of ['correct_purchase_record', 'record_product_usage', 'firestore_query', '__proto__']) await assert.rejects(tools.execute(name, input), e => e.code === 'FORBIDDEN');
   await assert.rejects(tools.execute('get_product_context', { productId: 'new', uid: 'other' }), e => e.code === 'INVALID_ARGUMENT');
+  for (const args of [{ limit: false }, { limit: 101 }, { productId: ['new'] }, { cursor: [] }]) await assert.rejects(tools.execute('get_purchase_history', args), e => e.code === 'INVALID_ARGUMENT');
   const granted = createCommerceTools({ application: app(), uid: 'owner', requestId: 'req', userMutations: [{ name: 'correct_purchase_record', arguments: input }] });
   assert.equal((await granted.execute('correct_purchase_record', input)).uid, 'owner');
   await assert.rejects(granted.execute('correct_purchase_record', { ...input, value: 'soap' }), e => e.code === 'FORBIDDEN');

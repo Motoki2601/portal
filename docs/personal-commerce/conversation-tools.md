@@ -39,7 +39,7 @@ POST `/corrections`。必須: clientMutationId、collection、id、field、actio
 | purchaseLines | productId(null可)、quantity(null可/正整数)、status |
 | products | canonicalName、category、replenishmentStatus |
 
-元データを変えずuserOverridesを設定し、読出しでoverlay。releaseは指定fieldのoverrideのみ解除。最新revisionの確認、参照先商品確認、観測、revision更新、before/after監査を同transactionで確定する。同じmutation ID・同じ入力は以前の結果を返し、異なる入力は409。古いrevisionは409。取込・SKU照合はoverrideを維持する。明細productId訂正は指定明細のみで、同SKUの将来明細へのuser_match固定や商品split/mergeは未対応。
+元データを変えずuserOverridesを設定し、読出しでoverlay。productId訂正はmatchMethod=user、replenishmentStatus訂正はdecisionOrigin=userも同じ観測で固定し、解除時は同じ観測の付随固定を解除する。releaseは指定fieldのoverrideのみ解除。最新revisionの確認、参照先商品確認、観測、revision更新、before/after監査を同transactionで確定する。同じmutation ID・同じ入力は以前の結果を返し、異なる入力は409。古いrevisionは409。取込・SKU照合はoverrideを維持する。明細productId訂正は指定明細のみで、同SKUの将来明細へのuser_match固定や商品split/mergeは未対応。
 
 ## 推薦
 

@@ -57,6 +57,7 @@ test('anonymous history -> candidates -> research recommendation, corrections, s
   assert.equal((await app.getPurchaseHistory(uid, { limit: 1 })).items[0].order.orderedOn, '2026-09-01');
   await app.correctRecord(uid, { clientMutationId: 'unmatch', collection: 'purchaseLines', id: 'line-0', field: 'productId', action: 'set', value: null, expectedRevision: 1 }, 'req');
   assert.equal((await repo.getReplenishment(uid)).items[0].calculation.intervalCount, 0);
+  assert.equal((await app.getPurchaseHistory(uid, {})).items.find(x => x.line.id === 'line-0').line.matchMethod, 'user');
   await app.recordUsage(uid, { clientMutationId: 'use-a', productId: 'shampoo-a', value: 'current', expectedRevision: 0 }, 'req');
   const stateA = await app.recordState(uid, { clientMutationId: 'empty-a', productId: 'shampoo-a', kind: 'state', value: 'out_of_stock' }, 'req');
   assert.equal(stateA.effectiveState.usage, 'current');
@@ -64,7 +65,9 @@ test('anonymous history -> candidates -> research recommendation, corrections, s
   const useB = { clientMutationId: 'use-b', productId: 'shampoo-b', value: 'current', expectedRevision: 0 };
   const switched = await Promise.all([app.recordUsage(uid, useB, 'req'), app.recordUsage(uid, useB, 'retry')]);
   assert.deepEqual(switched[0].switchedProductIds, ['shampoo-a']);
-  assert.equal((await user.collection('productStates').doc('shampoo-a').get()).data().usage, 'not_current');
+  const oldState = (await user.collection('productStates').doc('shampoo-a').get()).data();
+  assert.equal(oldState.usage, 'not_current');
+  assert.equal((await user.collection('userObservations').doc(oldState.usageObservationId).get()).data().productId, 'shampoo-a');
   assert.equal((await user.collection('productStates').doc('shampoo-a').get()).data().state, 'out_of_stock');
   const current = await app.getCurrentProduct(uid, { category: 'shampoo' }); assert.equal(current.origin, 'user'); assert.equal(current.items[0].product.id, 'shampoo-b');
   assert.equal((await app.getReplenishment(uid, {})).items.length, 0);

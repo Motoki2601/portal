@@ -108,10 +108,11 @@ export function createConversationRepository(db, now = () => new Date()) {
   }
   async function mutation(uid, input, requestId, apply) {
     const user = root(uid), observationId = createHash('sha256').update(JSON.stringify(['v1', input.clientMutationId])).digest('hex');
-    const ref = user.collection('userObservations').doc(observationId), inputFingerprint = fingerprint(input), clock = Timestamp.fromDate(now());
+    const ref = user.collection('userObservations').doc(observationId), inputFingerprint = fingerprint(input);
     return db.runTransaction(async tx => {
       const previous = await tx.get(ref);
       if (previous.exists) { if (previous.data().inputFingerprint !== inputFingerprint) throw fail('CONFLICT', 'Mutation ID reused', 409); return previous.data().result; }
+      const clock = Timestamp.fromDate(now());
       const result = await apply(tx, user, observationId, clock);
       tx.create(ref, { schemaVersion: 1, createdAt: clock, recordedAt: clock, observedAt: clock, source: 'user', clientMutationId: input.clientMutationId, inputFingerprint, ...input, kind: input.collection ? (input.action === 'release' ? 'release' : 'correction') : 'usage', target: { collection: input.collection ?? 'products', id: input.id ?? input.productId }, result });
       return result;
@@ -133,8 +134,15 @@ export function createConversationRepository(db, now = () => new Date()) {
         if ((before.revision ?? 0) !== input.expectedRevision) throw fail('CONFLICT', 'Revision changed; read context again', 409);
         if (input.field === 'productId' && input.action === 'set' && input.value !== null && !(await tx.get(user.collection('products').doc(input.value))).exists) throw fail('NOT_FOUND', 'Product not found', 404);
         const overrides = { ...before.userOverrides };
-        if (input.action === 'release') { if (!Object.hasOwn(overrides, input.field)) throw fail('CONFLICT', 'No override to release', 409); delete overrides[input.field]; }
-        else overrides[input.field] = { value: input.value, observationId: oid };
+        const companion = input.collection === 'purchaseLines' && input.field === 'productId' ? 'matchMethod' : input.collection === 'products' && input.field === 'replenishmentStatus' ? 'decisionOrigin' : null;
+        if (input.action === 'release') {
+          if (!Object.hasOwn(overrides, input.field)) throw fail('CONFLICT', 'No override to release', 409);
+          if (companion && overrides[companion]?.observationId === overrides[input.field].observationId) delete overrides[companion];
+          delete overrides[input.field];
+        } else {
+          overrides[input.field] = { value: input.value, observationId: oid };
+          if (companion) overrides[companion] = { value: 'user', observationId: oid };
+        }
         const after = { ...before, userOverrides: overrides, revision: (before.revision ?? 0) + 1, updatedAt: clock };
         tx.set(ref, after);
         audit(tx, user, { collection: input.collection, id: input.id }, before, after, oid, requestId, clock, 'user', input.action === 'release' ? 'release' : 'correct');
@@ -152,13 +160,13 @@ export function createConversationRepository(db, now = () => new Date()) {
         const previous = input.value === 'current' && knownCategory ? products.map(effective).filter(p => p.id !== product.id && p.category === product.category && states.some(s => s.id === p.id && s.usage === 'current')).map(p => p.id) : [];
         if (previous.length > 100) throw fail('RESOURCE_EXHAUSTED', 'Too many current products to switch atomically', 413);
         for (const pid of [...previous, product.id]) {
-          const before = states.find(s => s.id === pid), value = pid === product.id ? input.value : 'not_current';
-          const after = { state: 'unknown', origin: 'unknown', observedAt: null, observationId: null, suppressUntil: null, ...before, schemaVersion: 1, createdAt: before?.createdAt ?? clock, updatedAt: clock, revision: (before?.revision ?? 0) + 1, usage: value, usageOrigin: value === 'unknown' ? 'unknown' : 'user', usageObservationId: oid, usageObservedAt: clock, usageRecordedAt: clock };
+          const before = states.find(s => s.id === pid), value = pid === product.id ? input.value : 'not_current', usageObservationId = pid === product.id ? oid : fingerprint([oid, pid]);
+          const after = { state: 'unknown', origin: 'unknown', observedAt: null, observationId: null, suppressUntil: null, ...before, schemaVersion: 1, createdAt: before?.createdAt ?? clock, updatedAt: clock, revision: (before?.revision ?? 0) + 1, usage: value, usageOrigin: value === 'unknown' ? 'unknown' : 'user', usageObservationId, usageObservedAt: clock, usageRecordedAt: clock };
           delete after.id;
           tx.set(user.collection('productStates').doc(pid), after);
-          audit(tx, user, { collection: 'productStates', id: pid }, before ? Object.fromEntries(Object.entries(before).filter(([k]) => k !== 'id')) : null, after, oid, requestId, clock, 'user', 'observe');
+          audit(tx, user, { collection: 'productStates', id: pid }, before ? Object.fromEntries(Object.entries(before).filter(([k]) => k !== 'id')) : null, after, usageObservationId, requestId, clock, 'user', 'observe');
           // Each switched product gets its own observation in the same transaction.
-          if (pid !== product.id) tx.create(user.collection('userObservations').doc(fingerprint([oid, pid])), { schemaVersion: 1, createdAt: clock, recordedAt: clock, observedAt: clock, source: 'user', kind: 'usage', productId: pid, value, parentObservationId: oid, target: { collection: 'products', id: pid } });
+          if (pid !== product.id) tx.create(user.collection('userObservations').doc(usageObservationId), { schemaVersion: 1, createdAt: clock, recordedAt: clock, observedAt: clock, source: 'user', kind: 'usage', productId: pid, value, parentObservationId: oid, target: { collection: 'products', id: pid } });
         }
         return { observationId: oid, productId: product.id, usage: input.value, revision: input.expectedRevision + 1, switchedProductIds: previous };
       });

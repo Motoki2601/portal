@@ -15,6 +15,17 @@ const definitions = [
   ['correct_purchase_record', 'ユーザー明示訂正をoverrideに保存。releaseで指定フィールドの固定を解除。最新revisionが必須。', schema({ clientMutationId: str, collection: { enum: ['purchaseOrders', 'purchaseLines', 'products'] }, id: str, field: str, value: {}, action: { enum: ['set', 'release'] }, expectedRevision: integer }, ['clientMutationId', 'collection', 'id', 'field', 'action', 'expectedRevision']), 'correctRecord', true],
   ['save_recommendation', '外部調査結果を独立snapshotで保存。価格不明はnull。価格の根拠HTTPS URL・観測UTC時刻が必須。履歴事実を書き換えない。', schema({ clientMutationId: str, productId: str, contextFingerprint: str, rationale: str, recommendedProduct: schema({ name: str, url: str }, ['name']), alternatives: { type: 'array', maxItems: 5, items: schema({ name: str, url: str, rationale: str, currentPrice: price }, ['name', 'url', 'rationale', 'currentPrice']) }, currentPrice: price, aiModel: str }, ['clientMutationId', 'productId', 'contextFingerprint', 'rationale', 'recommendedProduct', 'alternatives', 'currentPrice']), 'saveRecommendation'],
 ];
+function accepts(spec, value) {
+  if (spec.anyOf) return spec.anyOf.some(s => accepts(s, value));
+  if (spec.enum && !spec.enum.includes(value)) return false;
+  if (Object.hasOwn(spec, 'const') && value !== spec.const) return false;
+  if (spec.type === 'null') return value === null;
+  if (spec.type === 'string') return typeof value === 'string';
+  if (spec.type === 'integer') return Number.isSafeInteger(value) && (spec.minimum === undefined || value >= spec.minimum) && (spec.maximum === undefined || value <= spec.maximum);
+  if (spec.type === 'array') return Array.isArray(value) && (spec.maxItems === undefined || value.length <= spec.maxItems) && value.every(v => accepts(spec.items, v));
+  if (spec.type === 'object') return !!value && typeof value === 'object' && !Array.isArray(value) && spec.required.every(k => Object.hasOwn(value, k)) && Object.keys(value).every(k => Object.hasOwn(spec.properties, k) && accepts(spec.properties[k], value[k]));
+  return true;
+}
 // The host supplies the verified uid and user-operation grant. Neither comes from model JSON.
 export function createCommerceTools({ application, uid, requestId, userMutations = [] }) {
   const allowed = definitions.filter(d => !d[4] || userMutations.some(m => m.name === d[0]));
@@ -24,7 +35,7 @@ export function createCommerceTools({ application, uid, requestId, userMutations
       const operation = allowed.find(d => d[0] === name);
       if (operation?.[4] && !userMutations.some(m => m.name === name && fingerprint(m.arguments) === fingerprint(args))) throw new AppError('FORBIDDEN', 'User mutation was not explicitly granted', 403);
       if (!operation) throw new AppError('FORBIDDEN', 'Tool is not granted', 403);
-      if (!args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some(k => !Object.hasOwn(operation[2].properties, k)) || operation[2].required.some(k => !Object.hasOwn(args, k))) throw invalid('Invalid tool arguments');
+      if (!accepts(operation[2], args)) throw invalid('Invalid tool arguments');
       const result = serialize(await application[operation[3]](uid, args, operation[3] === 'getReplenishment' ? false : requestId));
       if (JSON.stringify(result).length > 256 * 1024) throw new AppError('RESOURCE_EXHAUSTED', 'Tool response too large; narrow the query', 413);
       return result;
