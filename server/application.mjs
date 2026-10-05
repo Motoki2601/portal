@@ -36,6 +36,15 @@ export function createApplication(repository, now = () => new Date()) {
     async importAmazonCsv(uid, body, requestId) {
       return repository.importAmazonCsv(uid, body, requestId);
     },
+    async matchProducts(uid, body, requestId) {
+      if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length) throw invalid('Expected empty JSON object');
+      return repository.matchProducts(uid, requestId);
+    },
+    async getReplenishment(uid, params, includeIneligible = false) {
+      if (Object.keys(params).length) throw invalid('Query parameters are not accepted');
+      const result = await repository.getReplenishment(uid);
+      return { ...result, items: includeIneligible ? result.items : result.items.filter(x => x.candidate.eligible) };
+    },
     async getPurchaseHistory(uid, params = {}) {
       const allowed = ['productId', 'fromOn', 'toOn', 'limit', 'cursor'];
       if (Object.keys(params).some(k => !allowed.includes(k))) throw invalid('Unknown query parameter');

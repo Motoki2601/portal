@@ -39,7 +39,10 @@ export function createApi({ application, verifyToken, allowedOrigins, allowedUid
         for (const name of new Set(url.searchParams.keys())) if (url.searchParams.getAll(name).length !== 1) throw invalid('Repeated query parameter');
         send(200, await application.getPurchaseHistory(uid, Object.fromEntries(url.searchParams))); return;
       }
-      if (req.method === 'POST' && ['/user-observations', '/imports/amazon-csv'].includes(url.pathname)) {
+      if (req.method === 'GET' && ['/replenishment-candidates', '/replenishment-estimates'].includes(url.pathname)) {
+        send(200, await application.getReplenishment(uid, Object.fromEntries(url.searchParams), url.pathname === '/replenishment-estimates')); return;
+      }
+      if (req.method === 'POST' && ['/user-observations', '/imports/amazon-csv', '/purchase-history/match-products'].includes(url.pathname)) {
         if (url.search) throw invalid('Query parameters are not accepted');
         if (req.headers['content-type']?.split(';')[0].trim() !== 'application/json') throw invalid('Content-Type must be application/json');
         const chunks = await new Promise((resolve, reject) => {
@@ -50,7 +53,7 @@ export function createApi({ application, verifyToken, allowedOrigins, allowedUid
           req.on('error', reject);
         });
         let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw invalid('Invalid JSON'); }
-        send(200, url.pathname === '/imports/amazon-csv' ? await application.importAmazonCsv(uid, body, requestId) : await application.recordState(uid, body, requestId)); return;
+        send(200, url.pathname === '/imports/amazon-csv' ? await application.importAmazonCsv(uid, body, requestId) : url.pathname === '/purchase-history/match-products' ? await application.matchProducts(uid, body, requestId) : await application.recordState(uid, body, requestId)); return;
       }
       throw new AppError('NOT_FOUND', 'Operation not found', 404);
     } catch (error) {
