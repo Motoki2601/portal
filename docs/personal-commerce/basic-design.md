@@ -520,3 +520,7 @@ Gmailレポート生成・送信
 - 監査ログの最小項目は§4で確定済み（実装検証は#16）
 
 これらは要件変更ではなく、基本設計・詳細設計上の決定事項とする。
+
+### AI会話境界の初期実装 (#19)
+
+Tool schemas、verified UIDを束縛するdispatcher、provider非依存の上限付き会話loopを追加。商品の最新文脈・カテゴリ現在利用、限定fieldのoverride訂正/解除、usageの原子的切替、価格根拠付きRecommendation snapshot保存をApplication操作で提供する。ユーザー補正Toolはホストの明示引数grantが必要。実provider/検索/UIと将来明細のuser_match固定・split/mergeは後続。詳細は [conversation-tools.md](conversation-tools.md)。

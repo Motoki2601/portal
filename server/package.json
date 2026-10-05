@@ -5,8 +5,8 @@
   "engines": { "node": ">=22" },
   "scripts": {
     "start": "node index.mjs",
-    "test": "node --test test/api.test.mjs test/amazon-csv.test.mjs test/replenishment.test.mjs",
-    "test:emulator": "firebase emulators:exec --config ../firebase.json --project demo-portal --only auth,firestore 'node --test --test-concurrency=1 test/emulator.test.mjs test/amazon-csv-emulator.test.mjs test/replenishment-emulator.test.mjs'"
+    "test": "node --test test/api.test.mjs test/amazon-csv.test.mjs test/replenishment.test.mjs test/conversation.test.mjs",
+    "test:emulator": "firebase emulators:exec --config ../firebase.json --project demo-portal --only auth,firestore 'node --test --test-concurrency=1 test/emulator.test.mjs test/amazon-csv-emulator.test.mjs test/replenishment-emulator.test.mjs test/conversation-emulator.test.mjs'"
   },
   "dependencies": { "firebase-admin": "14.5.0" },
   "devDependencies": {

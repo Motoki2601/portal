@@ -142,3 +142,10 @@ CSV保存後に`POST /purchase-history/match-products`へ空JSONを送る。商�
 候補/算出結果GETは4collection（注文・明細・商品・状態、各最大5,000件）を読み取りtransactionの同一snapshotで取得し、毎回最新のeffective値を計算する。結果はオンデマンドで返し、replenishmentEstimates collectionへキャッシュ保存しない。state申告・取消・訂正後も古い保存値を返さず再算出する。定期実行、推定projection保存、AI分類/名称/カテゴリ推定、カテゴリ指定/usage/releaseの書込みUIは後続。
 
 同日の購入を1機会へ集約し、平均・中央値、中央値を四捨五入した次回日、7日前の通知開始日を返す。数量で周期を割らない。商品履歴不足は既知カテゴリだけ補助し、カテゴリ不明は推定不可。excluded/not_current・7日抑制を優先し、過去の残あり状態は消さない。同カテゴリの別商品を後から購入している場合は、明示currentがない古い商品を候補から除く。明示out_of_stockの周期不足例外はcurrent指定された対象商品だけ。候補は在庫切れの断定ではない。
+
+## AI会話 / Tool境界 (#19)
+
+`POST /tools/call` は `{name,arguments}` で許可済みread/推薦Toolを実行。Firebase認証済みUIDのみを使用し、モデルからuser補正権限を受け取らない。
+本人の明示操作は `POST /corrections`、`POST /product-usage`、推薦保存は `POST /recommendations`。すべてJSON、8KiB上限。
+transport非依存の `createCommerceTools` と注入providerの `runCommerceConversation`、訂正・切替・推薦transactionを提供する。
+実AI/検索providerと会話UIの接続は後続。詳細・入力フィールドは [conversation-tools.md](../docs/personal-commerce/conversation-tools.md)。
