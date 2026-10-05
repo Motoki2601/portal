@@ -20,9 +20,9 @@ providerへ送るのはallowlistで抽出した購入情報のみ。住所・氏
 提案route: POST /conversations、JSON {message,clientRequestId}のみ。サーバーがverified UID/requestIdを束縛してToolを作る。clientRequestIdは認証UIDに束縛した重複要求制御用で、host requestId/費用operationIdとは区別する。既存Firebase ID token、UID/Origin allowlist、JSON Content-Type、query拒否、no-store、秘匿ログを継承する。UTF-8 envelope上限は64KiB、message文字上限は8000。byte/文字それぞれ検証し、これ以外の既存route上限は変更しない。
 成功は {text,toolCallCount,requestId,aiStatus}。根拠・補正proposal拡張は#39/#40でversionを合わせ、Toolの現行戻り値にmetadataを混ぜない。HTTPは400不正、401認証、403権限、409重複内容競合、413容量、429会話/同時実行上限、503費用停止/モデル不可/外部不明を機械可読code付きで返す。timeout/cancelで後続callを止め、結果不明の有料callを自動retryしない。重複clientRequestIdで課金callを再起動しない。
 
-## #32との費用共有契約（提案、担当間確定待ち）
+## #32との費用共有契約（基盤担当と合意、主担当レビュー待ち）
 
-外部AIと検索の全call前に reserve({operationId,kind,model,upperBoundJpyMicro,pricingVersion,monthKey}) → {allowed,reservationId,code}、成功後 settle({reservationId,usage,costJpyMicro})、結果不明は markUnknown({reservationId}) を行う。費用は整数micro円、月はAsia/Tokyo。AI取込・会話・検索で同じ700円枠を共有し、確定費用＋未確定予約＋今回上限が700円を超えればtransactionで拒否する。料金/換算レート不明、台帳不可、上限不明では外部callを開始しない。
+外部AIと検索の全call前に createAiBudgetGate(db,{scope:'personal-commerce',clock,limitMicros:700000000}) を使う。reserve({operationId,kind,model,upperBoundJpyMicro,pricingVersion,hardBoundVerified}) → {allowed,reservationId,state,code,fallback}、送信直前の claimDispatch(reservationId) が原子的に一度だけtrueであることを必須とし、成功後 settle(reservationId,actualJpyMicro)、結果不明は markUnknown(reservationId) を行う。費用は整数micro円、月はhostのAsia/Tokyo clockから決定しcaller指定不可。cancel(reservationId)は未dispatchのみ。AI取込・会話・検索で同じ700円枠を共有し、確定費用＋未確定予約＋今回上限が700円を超えればtransactionで拒否する。料金/換算レート不明、台帳不可、上限不明では外部callを開始しない。
 上限には毎往復の増加した入力、schema/Tool結果、thinkingを含む最大出力、検索query課金、換算余裕を含める。予約operationIdはcall単位で冪等。送信前未実行を証明できた場合だけ解放し、送信後timeout/切断/再起動のunknownは予約を保持する。月またぎの精算は予約月へ戻す。課金実績の上限超過は即停止・監査対象であり、超過を隠さない。
 停止時は非AIの履歴参照・周期計算・価格なし通知を維持し、会話画面に停止理由を表示する。モデル不可や停止からの解除は運用確認を要し、自動model変更しない。
 
@@ -62,5 +62,5 @@ provider形式を正規化し {sources:[{url,title,observedAt}],citations:[{star
 ## 再開情報
 
 状態: 契約準備のみ、#32受入待ち。実装・有料call・本番変更・本人データ利用は未実施。
-次の一手: 基盤担当と費用interface/料金/上限保証を確定し、主担当レビュー後に#32受入を確認する。
+次の一手: 合意した費用interfaceを主担当レビューへ回し、料金/上限保証と#32受入を確認する。
 再開順: #9 → execution-plan.md → #38/#39/#40 → 本書のPR/CI → 実環境。
