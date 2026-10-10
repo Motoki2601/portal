@@ -94,3 +94,7 @@ GCP読取りでSecret Manager APIは未有効（SERVICE_DISABLED）と確認し�
 - [Thinkingのhard cutoff](https://ai.google.dev/gemini-api/docs/thinking)
 - [固定モデルの入力上限](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
 - [Interactions request/usage](https://ai.google.dev/api/interactions-api)
+
+## 実環境の更新（2026-10-10）
+
+上の未有効という記録の後、ユーザーのコマンド承認を受けてSecret Manager APIだけを有効化し、enabled状態を読み戻し確認した。Secret一覧は0件。キー登録、IAM変更、Gemini有料call、Cloud Run再デプロイは未実施。次のINPUTはGemini有料APIキーの準備と固定version Secretへの保管。最新commitの[CI](https://github.com/Motoki2601/portal/actions/runs/38043989796)はsuccess。
