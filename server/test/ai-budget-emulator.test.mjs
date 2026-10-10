@@ -70,3 +70,41 @@ test('budgeted provider blocks parallel paid calls and retains unknown cost on F
   assert.equal(calls, 1);
   await assert.rejects(gate.cancel('first'));
 });
+
+test('Gemini adapter reserves atomically and provider-bound violations block pending dispatches', async t => {
+  const { createBudgetedGeminiProvider, GEMINI_INPUT_BOUND, GEMINI_OUTPUT_BOUND } = await import('../gemini-provider.mjs');
+  const { createAiCostReservation } = await import('../ai-pricing.mjs');
+  assert(process.env.FIRESTORE_EMULATOR_HOST);
+  const app = initializeApp({ projectId: 'demo-portal' }, 'gemini-budget-test'); t.after(() => deleteApp(app));
+  const config = { model: 'gemini-3.5-flash-lite', apiKeySecret: 'projects/123456789/secrets/fixture-key/versions/1', pricingVersion: 'fixture', jpyMicrosPerUsd: 150000000, inputUsdMicrosPerMillion: 300000, outputUsdMicrosPerMillion: 2500000, searchUsdMicrosPerQuery: 14000 };
+  const bounds = { maxInputTokens: GEMINI_INPUT_BOUND, maxOutputTokens: GEMINI_OUTPUT_BOUND, maxSearchQueries: 0, tokenBoundEvidence: 'fixture' };
+  const amount = createAiCostReservation(config, bounds).upperBoundJpyMicro;
+  const gate = createAiBudgetGate(getFirestore(app), { scope: `gemini-${Date.now()}`, limitMicros: amount, clock: () => new Date('2026-10-10T00:00:00Z') });
+  let start, finish, sends = 0, secretReads = 0;
+  const started = new Promise(resolve => { start = resolve; });
+  const hold = new Promise(resolve => { finish = resolve; });
+  const call = createBudgetedGeminiProvider({ gate, config, readSecret: async () => { secretReads++; return Buffer.from('anonymous_fixture_key_1234'); },
+    fetchImpl: async () => {
+      sends++; start(); await hold;
+      return new Response(JSON.stringify({ model: config.model, status: 'completed',
+        usage: { total_input_tokens: 100, total_output_tokens: GEMINI_OUTPUT_BOUND + 1, total_thought_tokens: 0, total_tokens: 100 + GEMINI_OUTPUT_BOUND + 1 },
+        steps: [{ type: 'model_output', content: [{ type: 'text', text: 'anonymous' }] }],
+      }));
+    },
+  });
+  const first = call({ input: 'anonymous' }, { operationId: 'first' });
+  try {
+    await started;
+    assert.equal((await call({ input: 'other' }, { operationId: 'other' })).code, 'MONTHLY_BUDGET_EXHAUSTED');
+    assert.equal((await call({ input: 'anonymous' }, { operationId: 'first' })).allowed, false);
+  } finally { finish(); }
+  assert.equal((await first).value.code, 'PROVIDER_BOUND_VIOLATION');
+  assert.equal((await call({ input: 'later' }, { operationId: 'later' })).code, 'COST_OVERRUN');
+  assert.equal(sends, 1); assert.equal(secretReads, 1);
+
+  const blockedGate = createAiBudgetGate(getFirestore(app), { scope: `bound-control-${Date.now()}`, limitMicros: 100 });
+  const input = { operationId: 'pending', kind: 'ai', model: config.model, upperBoundJpyMicro: 60, pricingVersion: 'fixture', hardBoundVerified: true };
+  assert.equal((await blockedGate.reserve(input)).allowed, true);
+  await blockedGate.blockForBoundViolation();
+  assert.equal(await blockedGate.claimDispatch('pending'), false);
+});

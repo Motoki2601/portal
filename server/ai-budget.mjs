@@ -46,6 +46,9 @@ export function createAiBudgetGate(db, { scope = 'personal-commerce', clock = ()
         return { allowed: true, reservationId: operationId, state: 'reserved', replay: false };
       });
     },
+    async blockForBoundViolation() {
+      await db.runTransaction(async tx => { tx.set(root, { blocked: true, reason: 'PROVIDER_BOUND_VIOLATION' }, { merge: true }); });
+    },
     async claimDispatch(id) {
       return db.runTransaction(async tx => {
         const ref = reservation(id), [snap, control] = await Promise.all([tx.get(ref), tx.get(root)]);

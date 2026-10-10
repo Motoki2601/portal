@@ -2,7 +2,7 @@
 
 ## 範囲と残作業
 
-非本番の台帳・設定検証と共通provider呼出境界を提供する。実Gemini/検索adapter接続、Secret取得、取込保留、価格なし通知の本体は未完了。本番のSecret/IAM/課金設定を変更しない。#17のBilling/Budgetは再実装しない。2026-10-05に#17記録を確認。ロードマップ#9にはその後の実Billing/Budget確認・紐付け完了記録がある。Budget Alertは通知であり支出上限ではない。
+非本番の台帳・設定検証と共通provider呼出境界を提供する。Gemini text送信adapterと既定OFFのruntime構成を追加（末尾参照）。実Secret/IAM/有料API受入、会話route/Tool接続、検索、取込保留/価格なし通知の本体は未完了。本番のSecret/IAM/課金設定を変更しない。#17のBilling/Budgetは再実装しない。2026-10-05に#17記録を確認。ロードマップ#9にはその後の実Billing/Budget確認・紐付け完了記録がある。Budget Alertは通知であり支出上限ではない。
 
 ## 共有interface
 
@@ -61,3 +61,36 @@ Secret Manager API取得の共通readerを実装（下記）。実Gemini/OAuth/r
 単体: `node --test test/ai-budget.test.mjs`。Emulator: `firebase emulators:exec --config ../firebase.json --project demo-portal --only firestore "node --test test/ai-budget-emulator.test.mjs"`。匿名fixtureのみ。並行予約、重複dispatch、unknown、月跨ぎ、解放、超過の停止を検証。provider実課金/実IAMの証跡ではない。
 
 再開順: #9→実施計画書→#32→PR/CI→実環境。未完了はprovider全call箇所のgate統合、料金/検索上限保証、Secret/IAM実検証、縮退統合、本番承認。#32をcloseしない。
+
+## Gemini送信とruntime構成の接続（2026-10-10）
+
+`createBudgetedGeminiProvider({gate,config,readSecret,fetchImpl?,timeoutMs?})` を追加。固定Gemini Interactions endpointへ、費用予約/単一送信権の取得後にSecretを読み、POSTを1回だけ発行する。新規SDKなし、redirect/自動retryなし、stream/storeともfalse。
+
+初期adapterは信頼するサーバーの `{input,systemInstruction?}` という文字列入力だけを扱う。model/料金/Secret/検索設定等の入力overrideを拒否。rawメールの個人情報除去、会話Toolのオーケストレーション、検索はこのadapterに含めない。ホスト側で必要最小限の購入情報へ投影し、住所/氏名/支払情報を送らない処理は#34/#38で接続する。
+
+### 費用上限と使用量
+
+- モデルの入力上限1,048,576token全量を保守的に予約する。文字数からtoken数を見積もらず、追加countTokens callもしない。requestのUTF-8 JSONは64KiBまで。
+- Interactionsの `max_output_tokens=4096` を固定。これはthinkingも含む実効出力上限。thinking_levelはminimal。input/outputともtext限定、built-in tool/Agent/background/previous interactionは送信しない。
+- 使用量のinput/output/thought/totalの整数・合計整合を検証し、output+thoughtを課金出力として精算。暗黙cacheは割引を仮定せず入力全量へ通常単価を適用するため、記録額は保守的換算でありprovider請求額の厳密な照合ではない。料金/為替は運用設定で渡し固定しない。
+- input全量予約のため一時保留額は通常の質問実費より大きい。テスト料金/為替では約48.72円/呼出しを保留するが、正常な使用量で未使用分を解放する。この換算はfixtureであり本番為替の承認ではない。
+- 使用量欠落、非text/工具/検索使用量、送信失敗、応答不明時はunknownとして予約維持。既知の不完全生成は費用を精算して `{status:'incomplete',text:null}` を返す。
+- 信頼できる使用量からproviderのinput/output上限違反が観測された場合は `gate.blockForBoundViolation()` で以後のreserve/claimを停止し、実換算額をそのまま精算する。架空の超過課金を作らない。解除は運用確認/承認が必要。
+- Secret取得から応答読取りまで既定20秒、最大30秒。応答は1MiBまで。Secret Bufferは使用後ゼロ化し、キーはheaderだけに使う。例外/本文/キーは返答・ログへ出さない。停止中はSecret取得なし。
+
+### 起動構成
+
+`createOptionalAiRuntime({db,env,credential?,fetchImpl?,clock?})` をindex.mjsで構成し、application.aiRuntimeへ保持する。既定はOFF（AI_DISABLED）。`AI_RUNTIME_ENABLED=true` と `AI_RUNTIME_CONFIG_JSON` をserver設定へ与えた場合のみ準備する。JSONはvalidateAiRuntimeConfigのmodel/数値version固定Secret/料金/為替/根拠設定。Secret値はJSONに入れない。
+設定エラーはAI_CONFIGURATION_INVALIDと既存fallbackを返す。履歴/周期等の非AI API起動を妨げず、構成時にSecret/有料APIへアクセスしない。HTTP会話routeと既存会話loopのTool変換は#38で接続予定。現在の公開APIからこのadapterを呼び出す入口はまだない。
+
+### 検証と実接続のINPUT
+
+匿名Secret/偽HTTPの10試験を追加。固定transport、Secretなしの予算停止、入力override拒否、thinking/implicit cache換算、不完全生成精算、使用量不明hold/replay拒否、上限違反停止、deadline、APIエラー秘匿、runtime off/不正設定/Secret+gate結合を検証。実Firestoreの予約競合・停止試験も追加。
+
+GCP読取りでSecret Manager APIは未有効（SERVICE_DISABLED）と確認した。Secret値は未取得。次の本番差分はAPI有効化、Gemini有料projectに紐づくキーの固定version Secret保管、専用runtimeへの対象SecretのみsecretAccessor、料金/為替設定、匿名有料疎通と会話route接続。各具体的差分/料金/rollbackを準備してから反映する。今回実キー・有料call・本番設定変更なし。#32はopen維持。
+
+公式確認日2026-10-10:
+- [Interactions API](https://ai.google.dev/gemini-api/docs/interactions-overview)
+- [Thinkingのhard cutoff](https://ai.google.dev/gemini-api/docs/thinking)
+- [固定モデルの入力上限](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
+- [Interactions request/usage](https://ai.google.dev/api/interactions-api)
