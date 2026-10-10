@@ -7,6 +7,7 @@ import { createApi } from './http.mjs';
 import { createCsvImporter } from './amazon-csv.mjs';
 import { createConversationApplication, createConversationRepository } from './conversation.mjs';
 import { createReplenishmentOperations } from './replenishment.mjs';
+import { createOptionalAiRuntime } from './ai-runtime.mjs';
 
 const projectId = process.env.GOOGLE_CLOUD_PROJECT;
 const allowedUids = (process.env.ALLOWED_UIDS ?? '').split(',').map(v => v.trim()).filter(Boolean);
@@ -24,6 +25,7 @@ Object.assign(repository, createReplenishmentOperations(getFirestore(app)));
 Object.assign(repository, createConversationRepository(getFirestore(app)));
 const application = createApplication(repository);
 Object.assign(application, createConversationApplication(application, repository));
+application.aiRuntime = createOptionalAiRuntime({ db: getFirestore(app) });
 const api = createApi({ application, verifyToken: token => getAuth(app).verifyIdToken(token, true), allowedUids, allowedOrigins, log: entry => console.error(JSON.stringify(entry)) });
 api.requestTimeout = 30000;
 api.headersTimeout = 15000;
