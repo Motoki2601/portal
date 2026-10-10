@@ -3,12 +3,13 @@ import { signOut } from 'firebase/auth';
 import { auth } from './firebase';
 
 interface Props {
+  onOpenCommerce: () => void;
   onOpenWishlist: () => void;
   onOpenRecipes: () => void;
   onOpenBooks: () => void;
 }
 
-export default function Portal({ onOpenWishlist, onOpenRecipes, onOpenBooks }: Props) {
+export default function Portal({ onOpenCommerce, onOpenWishlist, onOpenRecipes, onOpenBooks }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-white via-white to-slate-50">
       <header className="bg-white/80 backdrop-blur-sm border-b border-indigo-100/60 sticky top-0 z-40">
@@ -25,6 +26,10 @@ export default function Portal({ onOpenWishlist, onOpenRecipes, onOpenBooks }: P
       </header>
 
       <main className="max-w-2xl mx-auto px-4 pt-6 pb-10 space-y-3">
+        <button onClick={onOpenCommerce} className="w-full flex items-center gap-4 bg-indigo-50 hover:bg-indigo-100 rounded-2xl px-5 py-4 border border-indigo-100 transition-all text-left">
+          <span className="flex items-center justify-center w-11 h-11 rounded-xl bg-indigo-100 text-indigo-700"><ShoppingBag size={20} /></span>
+          <span><p className="font-semibold text-slate-700">購入履歴・補充候補</p><p className="text-xs text-slate-500 mt-0.5">買い時を確認して、今の状態を記録</p></span>
+        </button>
         <button
           onClick={onOpenWishlist}
           className="w-full flex items-center gap-4 bg-white/90 hover:bg-indigo-50 active:scale-[0.99] rounded-2xl px-5 py-4 shadow-sm border border-indigo-100/60 transition-all text-left"

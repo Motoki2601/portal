@@ -5,8 +5,9 @@ import Portal from './Portal';
 import WishlistPage from './WishlistPage';
 import RecipePage from './RecipePage';
 import BooksPage from './BooksPage';
+import CommercePage from './CommercePage';
 
-type View = 'portal' | 'wishlist' | 'recipes' | 'books';
+type View = 'portal' | 'wishlist' | 'recipes' | 'books' | 'commerce';
 
 export default function App() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -26,7 +27,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
 
-  const openView = (next: 'wishlist' | 'recipes' | 'books') => {
+  const openView = (next: 'wishlist' | 'recipes' | 'books' | 'commerce') => {
     history.pushState({ view: next }, '');
     setView(next);
   };
@@ -55,6 +56,10 @@ export default function App() {
     );
   }
 
+  if (view === 'commerce') {
+    return <CommercePage key={user.uid} user={user} onBack={goBack} />;
+  }
+
   if (view === 'wishlist') {
     return <WishlistPage user={user} onBack={goBack} />;
   }
@@ -69,6 +74,7 @@ export default function App() {
 
   return (
     <Portal
+      onOpenCommerce={() => openView('commerce')}
       onOpenWishlist={() => openView('wishlist')}
       onOpenRecipes={() => openView('recipes')}
       onOpenBooks={() => openView('books')}
